@@ -118,6 +118,20 @@ def test_run_pre_market_then_intraday(client: TestClient):
     assert run_detail.json()["sentiment_report"] is not None
 
 
+def test_usage_accumulates_after_pipeline_runs(client: TestClient):
+    _register(client)
+
+    client.post("/api/pipeline/run-pre-market")  # 2 chiamate Claude: sentiment + strategy
+    client.post("/api/pipeline/run-intraday")  # 2 chiamate Claude: proposte + risk
+
+    usage_response = client.get("/api/usage")
+    assert usage_response.status_code == 200
+    body = usage_response.json()
+    assert body["total_input_tokens"] == 400
+    assert body["total_output_tokens"] == 200
+    assert body["estimated_cost_usd"] > 0
+
+
 def test_run_intraday_without_prior_strategy_is_rejected(client: TestClient):
     _register(client)
 

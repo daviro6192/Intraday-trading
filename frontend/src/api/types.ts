@@ -13,6 +13,15 @@ export interface Settings {
   ibkr_client_id: number
 }
 
+export interface UsageStats {
+  claude_model: string
+  total_input_tokens: number
+  total_output_tokens: number
+  total_cache_creation_tokens: number
+  total_cache_read_tokens: number
+  estimated_cost_usd: number
+}
+
 export interface Position {
   symbol: string
   quantity: number

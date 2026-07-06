@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiError, api } from '../api/client'
-import type { AccountState, PipelineRunDetail, PipelineRunSummary } from '../api/types'
+import type { AccountState, PipelineRunDetail, PipelineRunSummary, UsageStats } from '../api/types'
 import { useAuth } from '../context/AuthContext'
 
 export function DashboardPage() {
@@ -8,6 +8,7 @@ export function DashboardPage() {
   const [runs, setRuns] = useState<PipelineRunSummary[]>([])
   const [selectedRun, setSelectedRun] = useState<PipelineRunDetail | null>(null)
   const [account, setAccount] = useState<AccountState | null>(null)
+  const [usage, setUsage] = useState<UsageStats | null>(null)
   const [busy, setBusy] = useState<'pre-market' | 'intraday' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -24,9 +25,18 @@ export function DashboardPage() {
     }
   }
 
+  async function refreshUsage() {
+    try {
+      setUsage(await api.get<UsageStats>('/usage'))
+    } catch {
+      setUsage(null)
+    }
+  }
+
   useEffect(() => {
     void refreshRuns()
     void refreshAccount()
+    void refreshUsage()
   }, [])
 
   async function runPreMarket() {
@@ -37,6 +47,7 @@ export function DashboardPage() {
       await api.post('/pipeline/run-pre-market')
       setMessage('Ciclo pre-market completato: strategia del giorno aggiornata.')
       await refreshRuns()
+      await refreshUsage()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Errore nel ciclo pre-market')
     } finally {
@@ -53,6 +64,7 @@ export function DashboardPage() {
       setMessage(`Ciclo intraday completato: ${result.execution_results.length} ordine/i piazzato/i.`)
       await refreshRuns()
       await refreshAccount()
+      await refreshUsage()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Errore nel ciclo intraday')
     } finally {
@@ -69,6 +81,44 @@ export function DashboardPage() {
       <header className="page-header">
         <h1>Ciao, {user?.username}</h1>
       </header>
+
+      <section className="card">
+        <h2>Spesa Claude stimata</h2>
+        {usage ? (
+          <>
+            <div className="stat-row">
+              <div className="stat">
+                <span className="stat-label">Stima cumulativa</span>
+                <span className="stat-value">${usage.estimated_cost_usd.toFixed(4)}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Token input</span>
+                <span className="stat-value">{usage.total_input_tokens.toLocaleString()}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Token output</span>
+                <span className="stat-value">{usage.total_output_tokens.toLocaleString()}</span>
+              </div>
+            </div>
+            <p className="field-hint">
+              Calcolata dai token effettivamente usati da questa piattaforma (modello {usage.claude_model})
+              in base ai prezzi pubblici Anthropic. Non è il saldo prepagato reale del tuo account —
+              Anthropic non lo espone via API con una chiave normale (solo i limiti di
+              richieste/token al minuto, che sono un&apos;altra cosa). Per il saldo vero:
+            </p>
+          </>
+        ) : (
+          <p className="field-hint">Nessun dato di utilizzo ancora disponibile.</p>
+        )}
+        <div className="button-row">
+          <button
+            type="button"
+            onClick={() => window.open('https://console.anthropic.com/settings/billing', '_blank', 'noopener,noreferrer')}
+          >
+            Controlla il saldo reale su console.anthropic.com
+          </button>
+        </div>
+      </section>
 
       {account && (
         <section className="card">

@@ -34,6 +34,15 @@ class SettingsResponse(BaseModel):
     ibkr_client_id: int
 
 
+class UsageStats(BaseModel):
+    claude_model: str
+    total_input_tokens: int
+    total_output_tokens: int
+    total_cache_creation_tokens: int
+    total_cache_read_tokens: int
+    estimated_cost_usd: float
+
+
 class SettingsUpdateRequest(BaseModel):
     anthropic_api_key: str | None = None
     claude_model: str | None = None

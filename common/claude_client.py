@@ -34,6 +34,17 @@ class ClaudeClient:
     def __init__(self, api_key: str, model: str) -> None:
         self._client = anthropic.Anthropic(api_key=api_key)
         self._model = model
+        # Accumulo dei token usati dalle chiamate fatte tramite questa istanza,
+        # per stimare la spesa (vedi common/pricing.py). Anthropic non espone
+        # un endpoint per il saldo prepagato reale con una API key normale.
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+        self.total_cache_creation_tokens = 0
+        self.total_cache_read_tokens = 0
+
+    @property
+    def model(self) -> str:
+        return self._model
 
     @retry(
         reraise=True,
@@ -42,7 +53,13 @@ class ClaudeClient:
         retry=retry_if_exception_type((anthropic.APIConnectionError, anthropic.RateLimitError, anthropic.InternalServerError)),
     )
     def _create_message(self, **kwargs: Any) -> Any:
-        return self._client.messages.create(**kwargs)
+        response = self._client.messages.create(**kwargs)
+        usage = response.usage
+        self.total_input_tokens += usage.input_tokens
+        self.total_output_tokens += usage.output_tokens
+        self.total_cache_creation_tokens += getattr(usage, "cache_creation_input_tokens", None) or 0
+        self.total_cache_read_tokens += getattr(usage, "cache_read_input_tokens", None) or 0
+        return response
 
     def run_structured(
         self,

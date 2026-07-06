@@ -56,6 +56,14 @@ class UserSettings(Base):
     risk_limits_json: Mapped[str] = mapped_column(Text, default="{}")
     news_feeds_json: Mapped[str] = mapped_column(Text, default="[]")
 
+    # Token cumulativi usati dalla pipeline di questo utente, per stimare la
+    # spesa Claude (Anthropic non espone il saldo prepagato reale via API
+    # con una chiave normale — vedi common/pricing.py).
+    total_input_tokens: Mapped[int] = mapped_column(default=0)
+    total_output_tokens: Mapped[int] = mapped_column(default=0)
+    total_cache_creation_tokens: Mapped[int] = mapped_column(default=0)
+    total_cache_read_tokens: Mapped[int] = mapped_column(default=0)
+
     user: Mapped[User] = relationship(back_populates="settings")
 
 

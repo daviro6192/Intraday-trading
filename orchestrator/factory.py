@@ -55,4 +55,5 @@ def build_pipeline_for_user(user: User, session_factory: sessionmaker[Session]) 
         session_factory=session_factory,
         trading_config=trading_config,
         user_id=user.id,
+        claude_client=claude_client,
     )

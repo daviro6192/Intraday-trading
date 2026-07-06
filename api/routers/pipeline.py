@@ -14,6 +14,7 @@ from api.schemas import PipelineRunDetail, PipelineRunSummary
 from api.security import get_current_user
 from common.schemas import DailyStrategy
 from orchestrator.factory import build_pipeline_for_user
+from orchestrator.pipeline import Pipeline
 from storage.models import DailyStrategyRecord, PipelineRun, User
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
@@ -32,10 +33,27 @@ def _latest_strategy(db: Session, user_id: int) -> DailyStrategy | None:
     return DailyStrategy.model_validate_json(record.payload)
 
 
+def _accumulate_claude_usage(db: Session, user: User, pipeline: Pipeline) -> None:
+    """Somma i token consumati in questo ciclo alle impostazioni dell'utente,
+    per stimare la spesa Claude (vedi common/pricing.py)."""
+    claude_client = pipeline.claude_client
+    if claude_client is None:
+        return
+    settings = user.settings
+    settings.total_input_tokens += claude_client.total_input_tokens
+    settings.total_output_tokens += claude_client.total_output_tokens
+    settings.total_cache_creation_tokens += claude_client.total_cache_creation_tokens
+    settings.total_cache_read_tokens += claude_client.total_cache_read_tokens
+    db.commit()
+
+
 @router.post("/run-pre-market")
 def run_pre_market(
-    user: User = Depends(get_current_user), factory: sessionmaker[Session] = Depends(get_session_factory_dep)
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    factory: sessionmaker[Session] = Depends(get_session_factory_dep),
 ) -> dict:
+    pipeline = None
     try:
         pipeline = build_pipeline_for_user(user, factory)
         strategy = pipeline.run_pre_market()
@@ -43,6 +61,9 @@ def run_pre_market(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Errore nel ciclo pre-market: {exc}"
         ) from exc
+    finally:
+        if pipeline is not None:
+            _accumulate_claude_usage(db, user, pipeline)
     return strategy.model_dump(mode="json")
 
 
@@ -59,6 +80,7 @@ def run_intraday(
             detail="Nessuna strategia disponibile: eseguire prima /api/pipeline/run-pre-market",
         )
 
+    pipeline = None
     try:
         pipeline = build_pipeline_for_user(user, factory)
         results = pipeline.run_intraday_cycle(strategy)
@@ -66,6 +88,9 @@ def run_intraday(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Errore nel ciclo intraday: {exc}"
         ) from exc
+    finally:
+        if pipeline is not None:
+            _accumulate_claude_usage(db, user, pipeline)
 
     return {"execution_results": [r.model_dump(mode="json") for r in results]}
 

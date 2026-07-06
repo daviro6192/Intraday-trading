@@ -20,6 +20,12 @@ class FakeClaudeClient:
     def __init__(self, responses: dict[str, Callable[[str], BaseModel] | BaseModel]) -> None:
         self._responses = responses
         self.calls: list[tuple[str, str]] = []
+        # Stessi contatori di common.claude_client.ClaudeClient, usati da
+        # api/routers/pipeline.py per accumulare la spesa stimata dopo un ciclo.
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+        self.total_cache_creation_tokens = 0
+        self.total_cache_read_tokens = 0
 
     def run_structured(
         self,
@@ -29,6 +35,10 @@ class FakeClaudeClient:
         **kwargs: Any,
     ) -> BaseModel:
         self.calls.append((response_model.__name__, user_message))
+        # Incremento fisso e deterministico, per poter verificare nei test che
+        # l'accumulo lato API rifletta esattamente il numero di chiamate fatte.
+        self.total_input_tokens += 100
+        self.total_output_tokens += 50
         entry = self._responses[response_model.__name__]
         if isinstance(entry, BaseModel):
             return entry

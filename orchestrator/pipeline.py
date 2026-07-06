@@ -13,6 +13,7 @@ from agents.risk_agent import RiskAgent
 from agents.sentiment_agent import SentimentAgent
 from agents.strategy_agent import StrategyAgent
 from broker.base import BrokerClient
+from common.claude_client import ClaudeClient
 from common.schemas import DailyStrategy, ExecutionResult, Market
 from data_sources.market_data import get_market_snapshots
 from data_sources.news_feeds import fetch_all_feeds
@@ -37,6 +38,7 @@ class Pipeline:
         session_factory: sessionmaker[Session],
         trading_config: dict,
         user_id: int | None = None,
+        claude_client: ClaudeClient | None = None,
     ) -> None:
         self._sentiment_agent = sentiment_agent
         self._strategy_agent = strategy_agent
@@ -47,6 +49,10 @@ class Pipeline:
         self._session_factory = session_factory
         self._trading_config = trading_config
         self._user_id = user_id
+        # Riferimento pubblico al client Claude condiviso dagli agenti: usato
+        # dai chiamanti (es. api/routers/pipeline.py) per leggere i token
+        # consumati in questo ciclo dopo l'esecuzione e stimarne il costo.
+        self.claude_client = claude_client
         self.current_strategy: DailyStrategy | None = None
 
     @property

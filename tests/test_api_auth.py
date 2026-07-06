@@ -79,7 +79,7 @@ def test_new_user_gets_settings_seeded_from_trading_yaml(client: TestClient):
     assert settings_response.json()["trading_mode"] == "paper"
 
     watchlist_response = client.get("/api/watchlist")
-    assert "us_equities" in watchlist_response.json()
+    assert "crypto" in watchlist_response.json()
 
     risk_limits_response = client.get("/api/risk-limits")
     assert "max_risk_per_trade_pct" in risk_limits_response.json()

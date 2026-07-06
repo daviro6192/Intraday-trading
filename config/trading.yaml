@@ -1,22 +1,14 @@
 # Configurazione di trading: watchlist, limiti di rischio, sessioni di mercato, fonti dati.
 # Tutti i valori sono modificabili senza toccare il codice.
+#
+# Perimetro attuale: solo crypto (tradabile 24/7, a differenza di azioni/forex
+# vincolati a orari di sessione). Le sezioni per azioni USA/EU-IT e forex sono
+# state rimosse per ora; per reintrodurle basta aggiungere di nuovo in
+# `watchlists` una voce con `market: US_EQUITY|EU_EQUITY|FOREX` (vedi
+# common/schemas.py::Market per i valori validi) e la relativa sessione in
+# `sessions` con lo stesso schema usato qui sotto per CRYPTO.
 
 watchlists:
-  us_equities:
-    market: US_EQUITY
-    exchange: SMART
-    currency: USD
-    symbols: [AAPL, MSFT, NVDA, AMZN, SPY, QQQ]
-  eu_it_equities:
-    market: EU_EQUITY
-    exchange: SMART
-    currency: EUR
-    symbols: [ENI.MI, ISP.MI, ENEL.MI, STLAM.MI]
-  forex:
-    market: FOREX
-    exchange: IDEALPRO
-    currency: USD
-    symbols: [EURUSD, GBPUSD, USDJPY]
   crypto:
     market: CRYPTO
     exchange: PAXOS
@@ -26,18 +18,6 @@ watchlists:
 # Orari di sessione in UTC, usati dallo scheduler per decidere quando far girare
 # il pre-market job (agenti 1-2) e il loop intraday (agenti 3-4-5) per ciascun mercato.
 sessions:
-  US_EQUITY:
-    pre_market_utc: "11:30"
-    open_utc: "13:30"
-    close_utc: "20:00"
-  EU_EQUITY:
-    pre_market_utc: "06:30"
-    open_utc: "07:00"
-    close_utc: "15:30"
-  FOREX:
-    pre_market_utc: "00:00"
-    open_utc: "00:00"
-    close_utc: "23:59"
   CRYPTO:
     pre_market_utc: "00:00"
     open_utc: "00:00"

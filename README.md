@@ -165,9 +165,10 @@ della pipeline con Claude/dati di mercato finti).
 
 - `.env` (da `.env.example`): API key Claude, modalità di trading, credenziali
   di connessione a IB Gateway, URL del database.
-- `config/trading.yaml`: watchlist per mercato (azioni USA, EU/IT, forex,
-  crypto), orari di sessione, limiti di rischio (`risk_limits`), fonti RSS
-  di news.
+- `config/trading.yaml`: watchlist per mercato, orari di sessione, limiti di
+  rischio (`risk_limits`), fonti RSS di news. **Perimetro attuale: solo
+  crypto** (tradabile 24/7); la struttura supporta anche azioni USA/EU-IT e
+  forex, vedi il commento in cima al file per come reintrodurle.
 
 ### Limiti di rischio (`risk_limits` in trading.yaml)
 
@@ -187,14 +188,23 @@ size o rifiutare), mai superarli.
 ## Broker
 
 - **PaperBroker** (`broker/paper_broker.py`): simulatore in-memory, default
-  per sviluppo e test, nessuna dipendenza esterna.
+  per sviluppo e test, nessuna dipendenza esterna. **È l'unico broker in uso
+  al momento**: l'esecuzione reale sul crypto non è stata ancora collegata a
+  una piattaforma specifica (in valutazione un exchange con API ufficiale,
+  es. Binance).
 - **IBKRClient** (`broker/ibkr_client.py`): esecuzione reale su Interactive
   Brokers via [`ib_async`](https://github.com/ib-api-reloaded/ib_async),
   richiede IB Gateway o TWS in esecuzione. Porta paper di default: `7497`
   (TWS) / `4002` (IB Gateway); la modalità live richiede `TRADING_MODE=live`
-  esplicito in `.env`. Non è stato possibile testare questa integrazione
-  contro un vero IB Gateway in questo ambiente di sviluppo: verificarla con
-  un conto paper IBKR reale prima di qualunque uso in produzione.
+  esplicito in `.env`. Per il crypto copre solo poche monete (BTC/ETH/LTC/BCH
+  via Paxos, non in tutte le giurisdizioni). Non è stato possibile testare
+  questa integrazione contro un vero IB Gateway in questo ambiente di
+  sviluppo: verificarla con un conto paper IBKR reale prima di qualunque uso
+  in produzione.
+- **Trade Republic**: valutato e scartato. Non espone un'API ufficiale per il
+  trading automatizzato; le uniche librerie esistenti sono reverse-engineering
+  non ufficiale dell'app, che violano i loro Termini di Servizio — non
+  utilizzabili in sicurezza per questo progetto.
 
 ## Limiti noti / prossimi passi
 

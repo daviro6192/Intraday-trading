@@ -35,6 +35,8 @@ class Settings(BaseSettings):
 
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
+    secret_key: str = Field(default="dev-only-insecure-secret", alias="SECRET_KEY")
+
     @property
     def is_live(self) -> bool:
         return self.trading_mode is TradingMode.LIVE

@@ -36,6 +36,7 @@ class Pipeline:
         broker: BrokerClient,
         session_factory: sessionmaker[Session],
         trading_config: dict,
+        user_id: int | None = None,
     ) -> None:
         self._sentiment_agent = sentiment_agent
         self._strategy_agent = strategy_agent
@@ -45,6 +46,7 @@ class Pipeline:
         self._broker = broker
         self._session_factory = session_factory
         self._trading_config = trading_config
+        self._user_id = user_id
         self.current_strategy: DailyStrategy | None = None
 
     @property
@@ -62,7 +64,9 @@ class Pipeline:
         logger.info("Strategia generata con %d strumenti in watchlist", len(daily_strategy.watchlist))
 
         with self._session_factory() as session:
-            persist_pipeline_run(session, sentiment_report=sentiment_report, daily_strategy=daily_strategy)
+            persist_pipeline_run(
+                session, user_id=self._user_id, sentiment_report=sentiment_report, daily_strategy=daily_strategy
+            )
 
         self.current_strategy = daily_strategy
         return daily_strategy
@@ -94,7 +98,13 @@ class Pipeline:
         logger.info("Esecuzione: %d ordini piazzati", len(results))
 
         with self._session_factory() as session:
-            persist_pipeline_run(session, order_proposals=proposals, risk_decisions=decisions, execution_results=results)
+            persist_pipeline_run(
+                session,
+                user_id=self._user_id,
+                order_proposals=proposals,
+                risk_decisions=decisions,
+                execution_results=results,
+            )
 
         return results
 

@@ -64,6 +64,57 @@ python -m orchestrator.main --mode paper --ibkr-paper
 python -m orchestrator.main --mode live
 ```
 
+## Piattaforma web (multi-utente)
+
+Oltre alla CLI a singolo utente/configurazione globale, il progetto include
+una piattaforma web con login (`api/`, backend FastAPI + `frontend/`, SPA
+React/Vite): ogni utente registrato ha la propria API key Anthropic,
+watchlist, limiti di rischio e connessione IBKR, isolate dalle altre, e può
+avviare i cicli della pipeline e consultarne l'audit trail da un pannello nel
+browser invece che da terminale.
+
+### Sviluppo (due processi)
+
+```bash
+# terminale 1: backend su :8000
+source .venv/bin/activate
+uvicorn api.main:app --reload
+
+# terminale 2: frontend su :5173 (proxy /api -> :8000, vedi frontend/vite.config.ts)
+cd frontend
+npm install
+npm run dev
+```
+
+Apri `http://localhost:5173`, registra un account (username + password) e
+vai in **Impostazioni** per inserire la tua Anthropic API key e configurare
+IBKR se necessario. Da **Dashboard** puoi lanciare manualmente il ciclo
+pre-market e il ciclo intraday e vedere la cronologia delle run.
+
+### Uso locale con un solo processo
+
+```bash
+cd frontend && npm install && npm run build && cd ..
+uvicorn api.main:app
+```
+
+Dopo la build, `api/main.py` serve anche i file statici della SPA da
+`frontend/dist`: un solo comando, un solo processo, raggiungibile su
+`http://localhost:8000`.
+
+### Note di sicurezza e limiti di questa prima versione
+
+- Le password sono hashate (bcrypt), mai salvate in chiaro.
+- La API key Anthropic e le credenziali IBKR sono salvate in chiaro nel DB
+  locale (stesso livello di fiducia di un `.env` oggi); cifratura a riposo
+  non è coperta da questa versione.
+- La registrazione è aperta (nessun invito), coerente con l'uso pensato solo
+  in locale sulla propria macchina; da rivedere se in futuro esposta in rete.
+- I cicli pipeline si avviano manualmente dai pulsanti della dashboard: non
+  c'è ancora scheduling automatico per-utente in background (fast-follow).
+- Ogni utente deve comunque avere il proprio IB Gateway/TWS in esecuzione
+  raggiungibile con le proprie credenziali per l'esecuzione reale IBKR.
+
 ## Test
 
 ```bash
@@ -73,7 +124,9 @@ pytest
 La suite copre: parsing/validazione dei singoli agenti (Claude mockato),
 i guardrail numerici del risk manager (compresi tentativi espliciti di
 "bypass" da parte di un LLM finto, per verificare che il codice li blocchi
-comunque) e un'esecuzione end-to-end della pipeline con `PaperBroker`.
+comunque), un'esecuzione end-to-end della pipeline con `PaperBroker`, e
+l'API web (registrazione/login, isolamento dei dati per utente, trigger
+della pipeline con Claude/dati di mercato finti).
 
 ## Configurazione
 

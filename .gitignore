@@ -12,3 +12,8 @@ venv/
 .ruff_cache/
 *.log
 .DS_Store
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+

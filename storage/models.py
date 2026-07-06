@@ -1,7 +1,8 @@
 """Modelli ORM per l'audit trail completo di ogni fase della pipeline: ogni
 esecuzione (PipelineRun) è collegata al report di sentiment, alla strategia,
 alle proposte di ordine, alle decisioni del risk manager e agli esiti di
-esecuzione che ne sono derivati."""
+esecuzione che ne sono derivati. Include inoltre gli utenti della piattaforma
+web e le loro impostazioni personali (API key, watchlist, limiti di rischio)."""
 
 from __future__ import annotations
 
@@ -21,10 +22,50 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(Text, unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    settings: Mapped["UserSettings"] = relationship(back_populates="user", uselist=False)
+
+
+class UserSettings(Base):
+    """Impostazioni personali di un utente: seedate dai default di
+    config/trading.yaml alla registrazione, poi modificabili via API senza
+    toccare la configurazione globale usata dalla CLI."""
+
+    __tablename__ = "user_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+
+    anthropic_api_key: Mapped[str] = mapped_column(Text, default="")
+    claude_model: Mapped[str] = mapped_column(Text, default="claude-sonnet-5")
+    trading_mode: Mapped[str] = mapped_column(Text, default="paper")
+
+    ibkr_host: Mapped[str] = mapped_column(Text, default="127.0.0.1")
+    ibkr_port: Mapped[int] = mapped_column(default=7497)
+    ibkr_client_id: Mapped[int] = mapped_column(default=1)
+
+    # Blob JSON: struttura identica alle rispettive sezioni di config/trading.yaml
+    watchlists_json: Mapped[str] = mapped_column(Text, default="{}")
+    risk_limits_json: Mapped[str] = mapped_column(Text, default="{}")
+    news_feeds_json: Mapped[str] = mapped_column(Text, default="[]")
+
+    user: Mapped[User] = relationship(back_populates="settings")
+
+
 class PipelineRun(Base):
     __tablename__ = "pipeline_runs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Nullable: le esecuzioni da CLI (orchestrator/main.py, config globale) non
+    # sono legate a un utente della piattaforma web.
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     sentiment_reports: Mapped[list["SentimentReportRecord"]] = relationship(back_populates="run")
@@ -97,6 +138,7 @@ class ExecutionResultRecord(Base):
 def persist_pipeline_run(
     session: Session,
     *,
+    user_id: int | None = None,
     sentiment_report: SentimentReport | None = None,
     daily_strategy: DailyStrategy | None = None,
     order_proposals: list[OrderProposal] | None = None,
@@ -104,8 +146,8 @@ def persist_pipeline_run(
     execution_results: list[ExecutionResult] | None = None,
 ) -> int:
     """Registra su DB l'audit trail di un ciclo di pipeline (anche parziale, se
-    si interrompe prima dell'esecuzione)."""
-    run = PipelineRun()
+    si interrompe prima dell'esecuzione), scoped all'utente proprietario."""
+    run = PipelineRun(user_id=user_id)
     session.add(run)
     session.flush()  # per ottenere run.id
 

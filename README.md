@@ -75,14 +75,26 @@ browser invece che da terminale.
 
 ### Avvio rapido con un solo comando
 
+Su **macOS/Linux**, o su Windows da **Git Bash**/WSL:
+
 ```bash
 ./start.sh
 ```
 
-La prima volta crea l'ambiente virtuale, installa le dipendenze (Python e
-frontend), genera un `.env` con una `SECRET_KEY` casuale se non esiste, builda
-il frontend e avvia tutto su un solo processo/porta. Alla fine stampa due
-indirizzi:
+Su **Windows da PowerShell** (`./start.sh` non funziona in PowerShell, non è
+in grado di eseguire script bash):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+(Il flag `-ExecutionPolicy Bypass` serve solo a permettere l'esecuzione dello
+script per questa sessione, senza cambiare impostazioni globali del sistema.)
+
+La prima volta lo script crea l'ambiente virtuale, installa le dipendenze
+(Python e frontend), genera un `.env` con una `SECRET_KEY` casuale se non
+esiste, builda il frontend e avvia tutto su un solo processo/porta. Alla fine
+stampa due indirizzi:
 
 - `http://localhost:8000` — da questo computer;
 - `http://<ip-locale>:8000` — da smartphone o un altro dispositivo sulla

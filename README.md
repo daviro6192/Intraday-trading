@@ -73,7 +73,28 @@ watchlist, limiti di rischio e connessione IBKR, isolate dalle altre, e può
 avviare i cicli della pipeline e consultarne l'audit trail da un pannello nel
 browser invece che da terminale.
 
-### Sviluppo (due processi)
+### Avvio rapido con un solo comando
+
+```bash
+./start.sh
+```
+
+La prima volta crea l'ambiente virtuale, installa le dipendenze (Python e
+frontend), genera un `.env` con una `SECRET_KEY` casuale se non esiste, builda
+il frontend e avvia tutto su un solo processo/porta. Alla fine stampa due
+indirizzi:
+
+- `http://localhost:8000` — da questo computer;
+- `http://<ip-locale>:8000` — da smartphone o un altro dispositivo sulla
+  stessa rete Wi-Fi (utile per aprirla dal telefono senza installare nulla).
+
+> Nota: lo script mette in ascolto il server su tutte le interfacce di rete
+> (`0.0.0.0`), non solo su `localhost`, per essere raggiungibile dal telefono.
+> Va bene su una rete Wi-Fi domestica fidata; non esporlo su reti pubbliche o
+> su internet così com'è (nessun HTTPS, solo il login applicativo a
+> protezione).
+
+### Sviluppo (due processi separati, con hot-reload)
 
 ```bash
 # terminale 1: backend su :8000

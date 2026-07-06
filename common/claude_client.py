@@ -60,18 +60,24 @@ class ClaudeClient:
             "input_schema": response_model.model_json_schema(),
         }
         tools = [*(extra_tools or []), emit_tool]
+        # Se l'agente non ha altri tool da poter chiamare (nessun extra_tools),
+        # non c'è motivo di lasciare a Claude la scelta libera "auto": forziamo
+        # subito emit_result, evitando un secondo round-trip quasi sempre
+        # inutile (dimezza la latenza per i chiamanti senza tool aggiuntivi).
+        force_emit_from_start = not extra_tools
 
         messages: list[dict[str, Any]] = [{"role": "user", "content": user_message}]
 
         for iteration in range(max_tool_iterations):
             is_last_chance = iteration == max_tool_iterations - 1
+            force_emit = force_emit_from_start or is_last_chance
             response = self._create_message(
                 model=self._model,
                 max_tokens=max_tokens,
                 system=system_prompt,
                 messages=messages,
                 tools=tools,
-                tool_choice={"type": "tool", "name": _EMIT_RESULT_TOOL_NAME} if is_last_chance else {"type": "auto"},
+                tool_choice={"type": "tool", "name": _EMIT_RESULT_TOOL_NAME} if force_emit else {"type": "auto"},
             )
 
             tool_uses = [block for block in response.content if block.type == "tool_use"]

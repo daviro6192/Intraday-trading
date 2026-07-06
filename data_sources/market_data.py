@@ -8,6 +8,7 @@ vengono tradotti nel formato richiesto da yfinance.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 import ta
@@ -81,10 +82,15 @@ def get_market_snapshot(symbol: str, market: Market, period: str = "5d", interva
 
 
 def get_market_snapshots(symbols: list[tuple[str, Market]]) -> dict[str, dict]:
-    """Ritorna gli snapshot per una lista di (simbolo, mercato), saltando quelli falliti."""
+    """Ritorna gli snapshot per una lista di (simbolo, mercato) in parallelo,
+    saltando quelli falliti."""
+    if not symbols:
+        return {}
+
     snapshots: dict[str, dict] = {}
-    for symbol, market in symbols:
-        snapshot = get_market_snapshot(symbol, market)
-        if snapshot is not None:
-            snapshots[symbol] = snapshot
+    with ThreadPoolExecutor(max_workers=len(symbols)) as executor:
+        results = executor.map(lambda sm: (sm[0], get_market_snapshot(sm[0], sm[1])), symbols)
+        for symbol, snapshot in results:
+            if snapshot is not None:
+                snapshots[symbol] = snapshot
     return snapshots

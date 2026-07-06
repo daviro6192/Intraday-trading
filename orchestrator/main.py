@@ -1,4 +1,4 @@
-"""Entrypoint CLI: `python -m orchestrator.main [--mode paper|live] [--once]`."""
+"""Entrypoint CLI: `python -m orchestrator.main [--mode paper|live] [--once] [--setup]`."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from common.logging_config import configure_logging
 from config.settings import TradingMode, settings, trading_config
 from orchestrator.pipeline import Pipeline
 from orchestrator.scheduler import build_scheduler
+from orchestrator.setup_wizard import run_setup_wizard
 from storage.db import get_engine, get_session_factory, init_db
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,16 @@ def main() -> None:
         action="store_true",
         help="Usa IBKRClient contro un account paper IBKR invece del PaperBroker interno",
     )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Wizard interattivo per configurare la Anthropic API key in .env",
+    )
     args = parser.parse_args()
+
+    if args.setup:
+        run_setup_wizard()
+        return
 
     configure_logging(settings.log_level)
     trading_mode = TradingMode(args.mode)

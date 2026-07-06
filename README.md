@@ -31,8 +31,20 @@ un audit trail completo su DB ad ogni ciclo.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env   # e compilare ANTHROPIC_API_KEY
+
+# Wizard interattivo: chiede la tua Anthropic API key (console.anthropic.com),
+# la verifica con una chiamata minima e la salva in .env
+python -m orchestrator.main --setup
+
+# In alternativa, configurazione manuale:
+cp .env.example .env   # e compilare ANTHROPIC_API_KEY a mano
 ```
+
+> Nota: l'unico modo supportato per autenticare questa piattaforma con Claude
+> è una API key generata su console.anthropic.com, fatturata a consumo sul
+> proprio account Anthropic. Non esiste (né è previsto) un login OAuth
+> riutilizzabile dall'abbonamento Claude.ai/Claude Code in un'app di terze
+> parti come questa.
 
 ## Esecuzione
 

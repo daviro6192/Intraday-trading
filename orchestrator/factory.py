@@ -26,7 +26,22 @@ def build_broker_for_user(user_settings: UserSettings) -> BrokerClient:
         from broker.ibkr_client import IBKRClient
 
         return IBKRClient(user_settings.ibkr_host, user_settings.ibkr_port, user_settings.ibkr_client_id)
-    return PaperBroker()
+
+    broker = PaperBroker()
+    # Senza questo, ogni richiesta costruirebbe un simulatore vuoto da
+    # $100.000, perdendo la memoria dei trade precedenti tra un ciclo e
+    # l'altro (vedi commento su UserSettings.paper_broker_state_json).
+    if user_settings.paper_broker_state_json:
+        broker.load_state(json.loads(user_settings.paper_broker_state_json))
+    return broker
+
+
+def save_paper_broker_state(broker: BrokerClient, user_settings: UserSettings) -> None:
+    """Se il broker è il PaperBroker, persiste cassa/posizioni/P&L correnti
+    su UserSettings. Va chiamato dopo ogni operazione che può aver piazzato
+    ordini (il chiamante è responsabile di fare il commit della sessione)."""
+    if isinstance(broker, PaperBroker):
+        user_settings.paper_broker_state_json = json.dumps(broker.export_state())
 
 
 def build_pipeline_for_user(user: User, session_factory: sessionmaker[Session]) -> Pipeline:

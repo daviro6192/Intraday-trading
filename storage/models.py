@@ -64,6 +64,12 @@ class UserSettings(Base):
     total_cache_creation_tokens: Mapped[int] = mapped_column(default=0)
     total_cache_read_tokens: Mapped[int] = mapped_column(default=0)
 
+    # Stato persistito del PaperBroker (cassa, posizioni aperte, P&L
+    # realizzato oggi): senza questo, ogni chiamata API costruirebbe un
+    # simulatore vuoto da $100.000, perdendo la memoria dei trade precedenti
+    # tra un ciclo e l'altro. Vuoto finché non viene eseguito il primo ordine.
+    paper_broker_state_json: Mapped[str] = mapped_column(Text, default="")
+
     user: Mapped[User] = relationship(back_populates="settings")
 
 

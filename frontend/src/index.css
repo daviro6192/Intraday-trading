@@ -10,9 +10,19 @@
   --danger: #dc2626;
   --danger-bg: rgba(220, 38, 38, 0.08);
   --success: #16a34a;
+  --success-bg: rgba(22, 163, 74, 0.08);
+
+  /* Barra di navigazione: sempre scura, come il "chrome" persistente di una
+     vera piattaforma di trading, indipendentemente dal tema chiaro/scuro
+     della pagina. */
+  --navbar-bg: #0b0e14;
+  --navbar-border: #1f2430;
+  --navbar-text: #e5e7eb;
+  --navbar-text-dim: #8b93a7;
+  --navbar-accent: #34d399;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --mono: ui-monospace, 'SF Mono', Consolas, monospace;
 
   font: 16px/145% var(--sans);
   color-scheme: light dark;
@@ -37,7 +47,42 @@
     --danger: #f87171;
     --danger-bg: rgba(248, 113, 113, 0.12);
     --success: #4ade80;
+    --success-bg: rgba(74, 222, 128, 0.1);
   }
+}
+
+.mono-num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.value-positive {
+  color: var(--success);
+}
+
+.value-negative {
+  color: var(--danger);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.badge-long {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.badge-short {
+  color: var(--danger);
+  background: var(--danger-bg);
 }
 
 * {

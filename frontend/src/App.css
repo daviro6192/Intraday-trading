@@ -3,14 +3,28 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--card-bg);
+  border-bottom: 1px solid var(--navbar-border);
+  background: var(--navbar-bg);
+  box-shadow: 0 1px 0 rgba(52, 211, 153, 0.25);
 }
 
 .navbar-brand {
-  font-weight: 600;
-  color: var(--text-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--navbar-text);
   text-decoration: none;
+}
+
+.navbar-brand::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--navbar-accent);
+  box-shadow: 0 0 6px var(--navbar-accent);
 }
 
 .navbar-links {
@@ -19,14 +33,41 @@
   gap: 20px;
 }
 
+.navbar-links a {
+  color: var(--navbar-text-dim);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.navbar-links a:hover {
+  color: var(--navbar-text);
+}
+
+.navbar-links button.link-button {
+  color: var(--navbar-text-dim);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.navbar-links button.link-button:hover {
+  color: var(--navbar-text);
+}
+
 .page {
-  max-width: 900px;
+  max-width: 1120px;
   width: 100%;
   margin: 0 auto;
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  align-items: start;
 }
 
 .page-loading {
@@ -79,20 +120,41 @@
 }
 
 .stat-label {
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--text);
 }
 
 .stat-value {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: 22px;
   font-weight: 600;
   color: var(--text-h);
 }
 
+.stat-value.hero {
+  font-size: 32px;
+}
+
+.positions-table,
 .runs-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+}
+
+.positions-table th,
+.positions-table td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.positions-table td.mono-num {
+  text-align: right;
 }
 
 .runs-table th,

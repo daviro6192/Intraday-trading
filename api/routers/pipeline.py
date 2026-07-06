@@ -13,7 +13,7 @@ from api.deps import get_db, get_session_factory_dep
 from api.schemas import PipelineRunDetail, PipelineRunSummary
 from api.security import get_current_user
 from common.schemas import DailyStrategy
-from orchestrator.factory import build_pipeline_for_user
+from orchestrator.factory import build_pipeline_for_user, save_paper_broker_state
 from orchestrator.pipeline import Pipeline
 from storage.models import DailyStrategyRecord, PipelineRun, User
 
@@ -91,6 +91,8 @@ def run_intraday(
     finally:
         if pipeline is not None:
             _accumulate_claude_usage(db, user, pipeline)
+            save_paper_broker_state(pipeline.broker, user.settings)
+            db.commit()
 
     return {"execution_results": [r.model_dump(mode="json") for r in results]}
 

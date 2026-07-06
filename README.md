@@ -187,11 +187,24 @@ size o rifiutare), mai superarli.
 
 ## Broker
 
-- **PaperBroker** (`broker/paper_broker.py`): simulatore in-memory, default
-  per sviluppo e test, nessuna dipendenza esterna. **È l'unico broker in uso
-  al momento**: l'esecuzione reale sul crypto non è stata ancora collegata a
-  una piattaforma specifica (in valutazione un exchange con API ufficiale,
-  es. Binance).
+- **PaperBroker** (`broker/paper_broker.py`): simulatore, default per
+  sviluppo/test e **unico broker in uso al momento** (l'esecuzione reale sul
+  crypto non è ancora collegata a una piattaforma specifica — in valutazione
+  un exchange con API ufficiale, es. Binance). Pensato per essere realistico
+  quanto basta da poter validare una strategia nell'arco di più giorni:
+  - i fill usano il prezzo di mercato corrente (`data_sources/market_data.py`)
+    con una piccola escursione simulata, non il prezzo proposto alla cieca;
+  - le posizioni aperte vengono rivalutate al prezzo corrente ad ogni
+    lettura dello stato del conto (equity e P&L si muovono con il mercato
+    tra un ciclo e l'altro, non restano congelati al prezzo di ingresso);
+  - prezzo medio ponderato e P&L realizzato corretti quando si aggiunge o si
+    chiude una posizione;
+  - **lo stato (cassa, posizioni, P&L) è persistito per utente** in
+    `UserSettings.paper_broker_state_json`: senza questo, ogni richiesta
+    HTTP avrebbe ricreato un simulatore vuoto da $100.000, perdendo la
+    memoria dei trade precedenti — fondamentale per poter osservare
+    l'andamento del portafoglio nei giorni successivi invece che ripartire
+    da zero ad ogni ricarica della pagina.
 - **IBKRClient** (`broker/ibkr_client.py`): esecuzione reale su Interactive
   Brokers via [`ib_async`](https://github.com/ib-api-reloaded/ib_async),
   richiede IB Gateway o TWS in esecuzione. Porta paper di default: `7497`

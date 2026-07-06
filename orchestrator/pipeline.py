@@ -56,6 +56,10 @@ class Pipeline:
         self.current_strategy: DailyStrategy | None = None
 
     @property
+    def broker(self) -> BrokerClient:
+        return self._broker
+
+    @property
     def session_factory(self) -> sessionmaker[Session]:
         return self._session_factory
 

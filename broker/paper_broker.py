@@ -49,6 +49,41 @@ class PaperBroker:
     def disconnect(self) -> None:
         self._connected = False
 
+    def export_state(self) -> dict:
+        """Serializza cassa/posizioni/P&L realizzato, per persistere il
+        portafoglio simulato tra una richiesta e l'altra (vedi
+        orchestrator/factory.py)."""
+        return {
+            "cash": self._cash,
+            "realized_pnl_today": self._realized_pnl_today,
+            "positions": {
+                symbol: {
+                    "quantity": position.quantity,
+                    "avg_price": position.avg_price,
+                    "market": self._position_markets[symbol].value if symbol in self._position_markets else None,
+                }
+                for symbol, position in self._positions.items()
+            },
+        }
+
+    def load_state(self, state: dict) -> None:
+        """Ripristina uno stato prodotto da export_state(), sostituendo
+        interamente cassa/posizioni correnti."""
+        self._cash = state.get("cash", self._cash)
+        self._realized_pnl_today = state.get("realized_pnl_today", 0.0)
+        self._positions = {}
+        self._position_markets = {}
+        for symbol, data in state.get("positions", {}).items():
+            self._positions[symbol] = Position(
+                symbol=symbol,
+                quantity=data["quantity"],
+                avg_price=data["avg_price"],
+                market_value=0.0,
+                unrealized_pnl=0.0,
+            )
+            if data.get("market"):
+                self._position_markets[symbol] = Market(data["market"])
+
     def get_account_state(self) -> AccountState:
         """Rivaluta ogni posizione aperta al prezzo di mercato corrente (se
         disponibile), così equity e P&L riflettono i movimenti di mercato

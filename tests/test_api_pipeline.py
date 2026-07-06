@@ -139,6 +139,26 @@ def test_run_intraday_without_prior_strategy_is_rejected(client: TestClient):
     assert response.status_code == 400
 
 
+def test_paper_broker_state_persists_across_requests(client: TestClient, monkeypatch):
+    """Ogni richiesta HTTP costruisce un nuovo PaperBroker in memoria: senza
+    persistenza su UserSettings, la posizione aperta in un ciclo sparirebbe
+    alla chiamata successiva. Verifica che invece resti."""
+    monkeypatch.setattr("broker.paper_broker.get_market_snapshot", lambda symbol, market: None)
+    monkeypatch.setattr("broker.paper_broker.random.uniform", lambda a, b: 0.0)
+
+    _register(client)
+    client.post("/api/pipeline/run-pre-market")
+    client.post("/api/pipeline/run-intraday")
+
+    first_state = client.get("/api/account/state").json()
+    assert len(first_state["open_positions"]) == 1
+    assert first_state["open_positions"][0]["symbol"] == "AAPL"
+
+    second_state = client.get("/api/account/state").json()
+    assert second_state["open_positions"] == first_state["open_positions"]
+    assert second_state["cash"] == first_state["cash"]
+
+
 def test_pipeline_runs_are_scoped_per_user(client: TestClient):
     _register(client, username="trader1", password="password123")
     client.post("/api/pipeline/run-pre-market")

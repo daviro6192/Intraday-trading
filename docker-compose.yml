@@ -1,0 +1,17 @@
+services:
+  trading-app:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+      - trading-data:/app/data
+    # Di default esegue la pipeline una volta e termina; per lo scheduler continuo
+    # sostituire il comando con: python -m orchestrator.main --mode paper
+    command: ["python", "-m", "orchestrator.main", "--once", "--mode", "paper"]
+    # Se si usa IBKRClient invece del PaperBroker, è necessario un IB Gateway/TWS
+    # raggiungibile da questo container (es. su host.docker.internal:7497),
+    # non incluso in questo compose perché richiede login manuale interattivo.
+
+volumes:
+  trading-data:

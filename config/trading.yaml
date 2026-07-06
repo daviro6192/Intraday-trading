@@ -1,0 +1,75 @@
+# Configurazione di trading: watchlist, limiti di rischio, sessioni di mercato, fonti dati.
+# Tutti i valori sono modificabili senza toccare il codice.
+
+watchlists:
+  us_equities:
+    market: US_EQUITY
+    exchange: SMART
+    currency: USD
+    symbols: [AAPL, MSFT, NVDA, AMZN, SPY, QQQ]
+  eu_it_equities:
+    market: EU_EQUITY
+    exchange: SMART
+    currency: EUR
+    symbols: [ENI.MI, ISP.MI, ENEL.MI, STLAM.MI]
+  forex:
+    market: FOREX
+    exchange: IDEALPRO
+    currency: USD
+    symbols: [EURUSD, GBPUSD, USDJPY]
+  crypto:
+    market: CRYPTO
+    exchange: PAXOS
+    currency: USD
+    symbols: [BTC/USD, ETH/USD]
+
+# Orari di sessione in UTC, usati dallo scheduler per decidere quando far girare
+# il pre-market job (agenti 1-2) e il loop intraday (agenti 3-4-5) per ciascun mercato.
+sessions:
+  US_EQUITY:
+    pre_market_utc: "11:30"
+    open_utc: "13:30"
+    close_utc: "20:00"
+  EU_EQUITY:
+    pre_market_utc: "06:30"
+    open_utc: "07:00"
+    close_utc: "15:30"
+  FOREX:
+    pre_market_utc: "00:00"
+    open_utc: "00:00"
+    close_utc: "23:59"
+  CRYPTO:
+    pre_market_utc: "00:00"
+    open_utc: "00:00"
+    close_utc: "23:59"
+
+intraday_loop_interval_minutes: 10
+
+risk_limits:
+  # Rischio massimo (stop-loss) per singolo trade, come frazione dell'equity del conto.
+  max_risk_per_trade_pct: 0.01
+  # Se la perdita giornaliera realizzata+aperta supera questa frazione dell'equity,
+  # il risk manager blocca nuovi ordini per il resto della giornata.
+  max_daily_loss_pct: 0.03
+  # Numero massimo di posizioni aperte contemporaneamente.
+  max_concurrent_positions: 5
+  # Esposizione massima (valore nozionale) su un singolo strumento, come frazione dell'equity.
+  max_exposure_per_symbol_pct: 0.20
+  # Rapporto minimo reward/risk richiesto affinché una proposta possa essere approvata.
+  min_reward_risk_ratio: 1.5
+
+news_feeds:
+  - name: Reuters Business
+    url: https://feeds.reuters.com/reuters/businessNews
+  - name: Investing.com News
+    url: https://www.investing.com/rss/news.rss
+  - name: ECB Press Releases
+    url: https://www.ecb.europa.eu/rss/press.html
+  - name: ANSA Economia
+    url: https://www.ansa.it/sito/notizie/economia/economia_rss.xml
+
+claude:
+  sentiment_agent_model: claude-sonnet-5
+  strategy_agent_model: claude-sonnet-5
+  order_agent_model: claude-sonnet-5
+  risk_agent_model: claude-sonnet-5

@@ -21,8 +21,16 @@ from api.deps import get_session_factory_dep
 from api.routers import account, auth, session as session_router
 from api.routers import settings as settings_router
 from api.routers import trades as trades_router
+from common.logging_config import configure_logging
 from config.settings import settings
 from orchestrator.session_manager import session_manager
+
+# Senza questo, i log a livello INFO/WARNING di tutto il progetto (analisi
+# fondamentale, decisioni di trading, avvisi di rete verso Binance/CoinGecko)
+# restano invisibili quando si avvia con uvicorn: solo gli ERROR gravi
+# comparirebbero comunque (handler di fallback di Python), dando l'illusione
+# che "non succeda nulla" anche quando il sistema sta lavorando normalmente.
+configure_logging(settings.log_level)
 
 
 @asynccontextmanager

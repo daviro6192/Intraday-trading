@@ -47,6 +47,11 @@ _TAKE_PROFIT_ATR_MULTIPLIER = 1.3
 # Fallback se non ci sono abbastanza klines per calcolare l'ATR (es. avvio a freddo).
 _FALLBACK_STOP_PCT = 0.006
 _FALLBACK_TAKE_PROFIT_PCT = 0.01
+# Margine oltre il pareggio sulle fee richiesto al pavimento minimo del
+# take-profit (vedi _open): senza margine, arrotondamenti tra questo calcolo
+# e quello (indipendente) del risk gate potrebbero far cadere il profitto
+# atteso appena sotto la soglia richiesta.
+_FEE_FLOOR_SAFETY_MARGIN = 1.1
 
 
 def _atr(klines: list[dict] | None) -> float | None:
@@ -155,6 +160,23 @@ class OrderAgent:
         else:
             stop_distance = mark_price * _FALLBACK_STOP_PCT
             take_distance = mark_price * _FALLBACK_TAKE_PROFIT_PCT
+
+        # Il rapporto profitto atteso/fee del risk gate dipende SOLO dalla
+        # distanza percentuale del take-profit (la quantità si semplifica:
+        # profitto = quantità x distanza, fee = quantità x prezzo x tasso —
+        # la quantità non conta). Per simboli a bassa volatilità relativa
+        # (es. BTC), un take-profit dimensionato sull'ATR può restare
+        # strutturalmente sotto la soglia richiesta a QUALSIASI size,
+        # bloccando quel simbolo per sempre. Il pavimento seguente garantisce
+        # che il target superi sempre il pareggio sulle fee, indipendentemente
+        # da quanto è "piatto" il simbolo in questo momento.
+        min_take_distance = (
+            mark_price
+            * (2 * self._fee_schedule.taker_fee_pct + self._fee_schedule.default_funding_rate_fallback_pct)
+            * risk_params.min_profit_over_fees_multiple
+            * _FEE_FLOOR_SAFETY_MARGIN
+        )
+        take_distance = max(take_distance, min_take_distance)
 
         is_long = direction is TradeDirection.LONG
         stop_loss = mark_price - stop_distance if is_long else mark_price + stop_distance

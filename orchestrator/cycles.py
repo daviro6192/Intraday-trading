@@ -65,6 +65,15 @@ def run_fundamental_strategy_cycle(components: LiveComponents, state: SessionSta
     for view in views:
         state.strategy_views[view.symbol] = view
 
+    for view in views:
+        logger.info(
+            "Ciclo lento: %s -> direzione=%s conviction=%.2f (%s)",
+            view.symbol,
+            view.direction.value,
+            view.conviction,
+            view.rationale,
+        )
+
     with components.session_factory() as db:
         persist_analysis_cycle(
             db,

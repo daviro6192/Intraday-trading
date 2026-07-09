@@ -93,6 +93,7 @@ export function SessionPage() {
   }, [selectedDay])
 
   const isActive = status?.status === 'running' || status?.status === 'error'
+  const currentStatus = status?.status ?? 'not_started'
   // I numeri della sessione (trade eseguiti, P&L, fee/funding, orario di
   // avvio) hanno senso solo mentre una sessione è davvero in corso: a
   // sessione ferma appartengono ormai allo storico (sezione in basso), non
@@ -152,7 +153,6 @@ export function SessionPage() {
   const totalPnlToday = account
     ? account.realized_pnl_today + account.unrealized_pnl_today - account.fees_paid_today - account.funding_paid_today
     : null
-  const currentStatus = status?.status ?? 'not_started'
 
   return (
     <div className="page">

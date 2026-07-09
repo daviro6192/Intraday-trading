@@ -151,6 +151,12 @@ class OrderAgent:
         # allineino esattamente rende gli ingressi troppo rari).
         timing_direction = _timing_signal(klines)
         if timing_direction is not None and timing_direction is not view.direction:
+            logger.info(
+                "%s: strategia=%s ma momentum tecnico immediato=%s (contrario): aspetto",
+                symbol,
+                view.direction.value,
+                timing_direction.value,
+            )
             return OrderAgentTick()
 
         return self._open(symbol, view.direction, mark_price, klines, account, risk_params)
@@ -184,11 +190,15 @@ class OrderAgent:
 
         risk_per_unit = abs(mark_price - stop_loss)
         if risk_per_unit <= 0:
+            logger.warning("%s: rischio per unità nullo (mark_price=%.6f, stop=%.6f), nessun intent generato", symbol, mark_price, stop_loss)
             return OrderAgentTick()
 
         quantity = (self._max_risk_per_trade_pct * account.equity) / risk_per_unit
         if quantity <= 0:
+            logger.warning("%s: quantità calcolata non positiva (equity=%.2f), nessun intent generato", symbol, account.equity)
             return OrderAgentTick()
+
+        logger.info("%s: apro %s (mark=%.6f stop=%.6f take=%.6f qty=%.6f)", symbol, direction.value, mark_price, stop_loss, take_profit, quantity)
 
         intent = OrderIntent(
             symbol=symbol,

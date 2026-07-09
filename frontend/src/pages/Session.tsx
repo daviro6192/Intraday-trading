@@ -144,6 +144,12 @@ export function SessionPage() {
         void refreshStatus()
         void refreshAccount()
         void refreshStrategyViews()
+        // Senza questo, un trade chiuso a metà sessione (stop-loss,
+        // take-profit, inversione di strategia) non compariva nello
+        // storico finché non si premeva "Fine": veniva persistito subito
+        // sul backend, ma il frontend rileggeva /trades/days solo
+        // all'avvio della pagina e dopo lo stop.
+        void refreshTradeDays()
       }, POLL_INTERVAL_MS)
     }
     if (!isActive && pollRef.current !== null) {
@@ -156,7 +162,7 @@ export function SessionPage() {
         pollRef.current = null
       }
     }
-  }, [isActive, refreshStatus, refreshAccount, refreshStrategyViews])
+  }, [isActive, refreshStatus, refreshAccount, refreshStrategyViews, refreshTradeDays])
 
   async function startSession() {
     setBusy(true)

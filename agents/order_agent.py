@@ -136,7 +136,7 @@ class OrderAgent:
         # termine resta spesso contrario per minuti di fila e blocca quasi
         # tutti gli ingressi — l'opposto dell'effetto voluto. Le klines
         # restano usate solo per calcolare stop-loss/take-profit (ATR).
-        return self._open(symbol, view.direction, mark_price, klines, account, risk_params)
+        return self._open(symbol, view.direction, view.conviction, mark_price, klines, account, risk_params)
 
     @staticmethod
     def _breached(mark_price: float, level: float, is_long: bool, is_stop: bool) -> bool:
@@ -148,6 +148,7 @@ class OrderAgent:
         self,
         symbol: str,
         direction: TradeDirection,
+        conviction: float,
         mark_price: float,
         klines: list[dict] | None,
         account: AccountState,
@@ -187,7 +188,20 @@ class OrderAgent:
             logger.warning("%s: rischio per unità nullo (mark_price=%.6f, stop=%.6f), nessun intent generato", symbol, mark_price, stop_loss)
             return OrderAgentTick()
 
-        quantity = (self._max_risk_per_trade_pct * account.equity) / risk_per_unit
+        quantity_by_risk = (self._max_risk_per_trade_pct * account.equity) / risk_per_unit
+
+        # Il tetto di esposizione (risk_params.max_position_notional_pct) è il
+        # massimo di sistema, non superabile — ma QUANTO di quel massimo usare
+        # è a discrezione della Strategy Agent: scala con la sua conviction
+        # (0.3-1.0, sotto la soglia minima non si entra affatto, vedi run_tick),
+        # così un segnale forte investe una quota maggiore di uno debole.
+        # In pratica quantity_by_risk (dimensionata sullo stop ATR) supera
+        # quasi sempre questo tetto con stop così stretti, quindi è la
+        # quantità scalata sulla conviction a decidere la size reale.
+        max_notional_by_conviction = risk_params.max_position_notional_pct * account.equity * conviction
+        quantity_by_conviction = max_notional_by_conviction / mark_price if mark_price > 0 else 0.0
+
+        quantity = min(quantity_by_risk, quantity_by_conviction)
         if quantity <= 0:
             logger.warning("%s: quantità calcolata non positiva (equity=%.2f), nessun intent generato", symbol, account.equity)
             return OrderAgentTick()

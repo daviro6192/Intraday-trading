@@ -54,10 +54,11 @@ risk_limits:
   # Esposizione massima (valore nozionale) su un singolo strumento, come frazione dell'equity.
   # Con stop ATR stretti (voluti per aumentare la frequenza dei trade), la
   # size "grezza" richiesta dalla formula di rischio supera quasi sempre
-  # questo tetto: è lui, in pratica, a decidere il controvalore reale per
-  # trade — abbassato per tenere le fee in dollari proporzionate a trade
-  # piccoli e frequenti, invece di poche posizioni enormi.
-  max_exposure_per_symbol_pct: 0.002
+  # questo tetto: è lui, in pratica, a fare da SOFFITTO di sicurezza — la
+  # quota reale investita per trade è decisa dalla Strategy Agent in base
+  # alla conviction (vedi agents/strategy_agent.py e agents/order_agent.py),
+  # entro questo limite massimo.
+  max_exposure_per_symbol_pct: 0.20
   # Rapporto minimo reward/risk richiesto per un intent.
   min_reward_risk_ratio: 1.5
   # Leva massima consentita per posizione, indipendentemente da cosa propone Claude.

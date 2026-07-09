@@ -247,3 +247,45 @@ def test_opens_low_volatility_symbol_despite_tiny_atr_relative_to_price(agent, m
 
     assert tick.execution_result is not None
     assert tick.execution_result.status.value == "filled"
+
+
+def test_position_size_scales_with_strategy_conviction(agent, monkeypatch):
+    """La quota di capitale investita è a discrezione della Strategy Agent:
+    con stop ATR stretti la size "grezza" richiesta dal rischio supera quasi
+    sempre il tetto di esposizione, quindi è la conviction (0.3-1.0) a
+    decidere quanto di quel tetto usare — un segnale forte investe di più di
+    uno debole, appena sopra la soglia minima per tradare."""
+    monkeypatch.setattr("broker.paper_broker.get_mark_price", lambda symbol: 100.0)
+    risk_params = _risk_params(max_position_notional_pct=0.20)
+
+    weak_tick = agent.run_tick(
+        "BTCUSDT",
+        _view(TradeDirection.LONG, conviction=0.3),
+        position=None,
+        mark_price=100.0,
+        klines=_rising_klines(),
+        account=agent._broker.get_account_state(),
+        risk_params=risk_params,
+        current_stop_loss=None,
+        current_take_profit=None,
+    )
+    assert weak_tick.execution_result is not None
+    agent._broker.close_position("BTCUSDT")
+
+    strong_tick = agent.run_tick(
+        "BTCUSDT",
+        _view(TradeDirection.LONG, conviction=1.0),
+        position=None,
+        mark_price=100.0,
+        klines=_rising_klines(),
+        account=agent._broker.get_account_state(),
+        risk_params=risk_params,
+        current_stop_loss=None,
+        current_take_profit=None,
+    )
+    assert strong_tick.execution_result is not None
+
+    weak_qty = weak_tick.execution_result.filled_quantity
+    strong_qty = strong_tick.execution_result.filled_quantity
+    assert strong_qty > weak_qty
+    assert strong_qty == pytest.approx(weak_qty * (1.0 / 0.3), rel=0.01)

@@ -148,10 +148,16 @@ simboli tracciati.
 Il tuo compito è aggiornare i parametri di rischio (leva massima, esposizione
 massima per simbolo, limite di perdita giornaliera, moltiplicatore minimo di
 profitto sulle fee, simboli da mettere in pausa) in base a ciò che osservi:
-- se le performance recenti sono deboli, o le fee/funding stanno erodendo il
-  profitto, riduci leva/esposizione o alza il moltiplicatore minimo richiesto;
-- se un simbolo mostra segnali fondamentali molto instabili o perdite
-  ripetute, mettilo in pausa;
+- se le performance recenti (i trade DAVVERO eseguiti in questa sessione)
+  sono deboli, o le fee/funding stanno erodendo il profitto, riduci
+  leva/esposizione o alza il moltiplicatore minimo richiesto;
+- metti un simbolo in pausa SOLO sulla base di prove concrete già osservate
+  in questa sessione (es. più trade in perdita su quel simbolo, fee che
+  erodono sistematicamente il P&L): la volatilità o l'incertezza descritta
+  nell'analisi fondamentale NON è di per sé un motivo sufficiente per mettere
+  in pausa un simbolo che non ha ancora avuto occasione di essere tradato —
+  l'obiettivo della piattaforma è testare la strategia con trade reali, non
+  evitare a priori simboli volatili;
 - puoi anche allentare i parametri rispetto alla chiamata precedente se le
   performance lo giustificano, ma NON puoi mai superare i tetti massimi
   configurati a livello di sistema (verranno comunque forzati nel codice,

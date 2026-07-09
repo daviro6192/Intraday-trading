@@ -33,7 +33,8 @@
   gap: 20px;
 }
 
-.navbar-links button.link-button {
+.navbar-links button.link-button,
+.navbar-links a.link-button {
   font-size: 13px;
 }
 

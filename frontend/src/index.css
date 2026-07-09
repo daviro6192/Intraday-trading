@@ -140,14 +140,29 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button.link-button {
+button.link-button,
+a.link-button {
   background: none;
   color: var(--text-dim);
   padding: 0;
   font-weight: 500;
 }
 
-button.link-button:hover {
+/* button.link-button già eredita font/cursor/transition dalla regola
+   generica `button` sopra: un <a> (es. react-router <Link>) no, va
+   ripristinato esplicitamente per farlo apparire identico. */
+a.link-button {
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition:
+    opacity 0.15s,
+    transform 0.05s;
+}
+
+button.link-button:hover,
+a.link-button:hover {
   color: var(--text-h);
   opacity: 1;
 }

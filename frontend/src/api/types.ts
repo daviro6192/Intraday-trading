@@ -26,6 +26,26 @@ export interface AccountState {
   as_of: string
 }
 
+export type TradingMode = 'paper' | 'binance_testnet'
+
+export interface SettingsResponse {
+  has_api_key: boolean
+  claude_model: string
+  trading_mode: TradingMode
+  ibkr_host: string
+  ibkr_port: number
+  ibkr_client_id: number
+  has_binance_testnet_credentials: boolean
+}
+
+export interface SettingsUpdateRequest {
+  anthropic_api_key?: string
+  claude_model?: string
+  trading_mode?: TradingMode
+  binance_testnet_api_key?: string
+  binance_testnet_api_secret?: string
+}
+
 export type SessionStatus = 'not_started' | 'running' | 'stopped' | 'interrupted' | 'error'
 
 export interface SessionStatusResponse {

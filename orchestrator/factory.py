@@ -16,8 +16,10 @@ from agents.risk_agent import RiskReviewAgent
 from agents.strategy_agent import StrategyAgent
 from agents.symbol_screener_agent import SymbolScreenerAgent
 from broker.base import BrokerClient
+from broker.binance_futures_testnet_broker import BinanceFuturesTestnetBroker
 from broker.paper_broker import PaperBroker
 from common.claude_client import ClaudeClient
+from common.crypto import decrypt_secret
 from common.schemas import FeeSchedule, RiskParameters, SymbolCandidate
 from config.settings import trading_config
 from data_sources.binance_market_data import fetch_24h_ticker_stats
@@ -38,6 +40,23 @@ def build_fee_schedule_from_config() -> FeeSchedule:
 
 def build_broker_for_user(user_settings: UserSettings, fee_schedule: FeeSchedule) -> BrokerClient:
     execution_config = trading_config["execution"]
+
+    if user_settings.trading_mode == "binance_testnet":
+        api_key = decrypt_secret(user_settings.binance_testnet_api_key_encrypted)
+        api_secret = decrypt_secret(user_settings.binance_testnet_api_secret_encrypted)
+        if not api_key or not api_secret:
+            raise ValueError(
+                "Modalità Binance Testnet selezionata ma nessuna credenziale salvata: vai su "
+                "Impostazioni e inserisci API key/secret del tuo account Binance Futures Testnet "
+                "(registrato separatamente su testnet.binancefuture.com, non il tuo account Binance reale)."
+            )
+        return BinanceFuturesTestnetBroker(
+            api_key=api_key,
+            api_secret=api_secret,
+            fee_schedule=fee_schedule,
+            default_leverage=execution_config["default_leverage"],
+        )
+
     broker = PaperBroker(
         fee_schedule=fee_schedule,
         starting_cash=execution_config["starting_cash_usdt"],

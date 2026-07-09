@@ -171,24 +171,32 @@ viene **mai** bloccato dal gate, a nessuna condizione.
 ## Broker
 
 - **PaperBroker** (`broker/paper_broker.py`): simulatore di futures USDT-M
-  perpetual, **unico broker in uso**. Isolated margin per posizione (leva
-  fissata all'apertura), fee su ogni fill, funding periodico basato sul
-  tasso reale di Binance (fallback configurato se non raggiungibile),
-  liquidazione simulata se il prezzo di mark supera il prezzo di
-  liquidazione stimato. Prezzi/funding da `data_sources/binance_market_data.py`
-  (endpoint pubblici `fapi.binance.com`, nessuna API key richiesta).
-  Lo stato (cassa, posizioni, P&L, fee/funding accumulati) è persistito per
-  utente in `UserSettings.paper_broker_state_json`.
+  perpetual, broker di default (`trading_mode: "paper"`). Isolated margin per
+  posizione (leva fissata all'apertura), fee su ogni fill, funding periodico
+  basato sul tasso reale di Binance (fallback configurato se non
+  raggiungibile), liquidazione simulata se il prezzo di mark supera il
+  prezzo di liquidazione stimato. Prezzi/funding da
+  `data_sources/binance_market_data.py` (endpoint pubblici `fapi.binance.com`,
+  nessuna API key richiesta). Lo stato (cassa, posizioni, P&L, fee/funding
+  accumulati) è persistito per utente in `UserSettings.paper_broker_state_json`.
+- **BinanceFuturesTestnetBroker** (`broker/binance_futures_testnet_broker.py`):
+  esecuzione reale contro Binance Futures **Testnet** (fondi finti, stessa
+  identica API/comportamento del mainnet) — `trading_mode: "binance_testnet"`,
+  selezionabile dalla pagina Impostazioni. Serve un account Binance Futures
+  Testnet separato (registrazione su testnet.binancefuture.com, non l'account
+  Binance reale); le credenziali sono cifrate a riposo (`common/crypto.py`,
+  Fernet derivato da `SECRET_KEY`). Nessuno stato locale da persistere —
+  Binance stesso è la fonte di verità per cassa/posizioni. Limiti noti: nessuna
+  riconciliazione dopo un crash del processo a metà posizione; leva/margin
+  type impostati in-memory per istanza (ri-applicati, idempotenti, al primo
+  ordine dopo un riavvio).
 - **IBKRClient** (`broker/ibkr_client.py`): **legacy, non collegato alla
   pipeline** — scritto per bracket order azionari con stop/take-profit
   obbligatori, un modello diverso dalle entrate/uscite dirette long/short di
   questa versione. Resta nel repository come riferimento; andrebbe riscritto
-  se in futuro si tornerà all'esecuzione reale.
-- **Binance reale**: non collegato (solo dati di mercato pubblici, esecuzione
-  ancora simulata). Valutato per un fast-follow quando si vorrà passare a
-  ordini reali (richiederebbe API key Binance, gestione sicura delle
-  credenziali, e verifica che i futures perpetual siano disponibili nella
-  giurisdizione di deploy — Binance li blocca per IP di alcuni paesi).
+  se in futuro si tornerà all'esecuzione reale su azioni.
+- **Mainnet Binance reale**: non collegato — valutato come fast-follow solo
+  dopo aver validato l'integrazione testnet, con capitale vero in gioco.
 
 ## Limiti noti / prossimi passi
 

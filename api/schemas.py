@@ -32,6 +32,7 @@ class SettingsResponse(BaseModel):
     ibkr_host: str
     ibkr_port: int
     ibkr_client_id: int
+    has_binance_testnet_credentials: bool
 
 
 class UsageStats(BaseModel):
@@ -50,6 +51,8 @@ class SettingsUpdateRequest(BaseModel):
     ibkr_host: str | None = None
     ibkr_port: int | None = None
     ibkr_client_id: int | None = None
+    binance_testnet_api_key: str | None = None
+    binance_testnet_api_secret: str | None = None
 
 
 class SessionStatusResponse(BaseModel):

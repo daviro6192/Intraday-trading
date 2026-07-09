@@ -11,9 +11,14 @@ export function NavBar() {
       </Link>
       <div className="navbar-links">
         {user && (
-          <button className="link-button" onClick={() => void logout()}>
-            Esci ({user.username})
-          </button>
+          <>
+            <Link to="/settings" className="link-button">
+              Impostazioni
+            </Link>
+            <button className="link-button" onClick={() => void logout()}>
+              Esci ({user.username})
+            </button>
+          </>
         )}
       </div>
     </nav>

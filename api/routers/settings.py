@@ -6,14 +6,17 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from api.deps import get_db
 from api.schemas import SettingsResponse, SettingsUpdateRequest, UsageStats
 from api.security import get_current_user
+from common.crypto import encrypt_secret
 from common.pricing import estimate_cost_usd
 from storage.models import User
+
+_VALID_TRADING_MODES = {"paper", "binance_testnet"}
 
 router = APIRouter(prefix="/api", tags=["settings"])
 
@@ -27,6 +30,9 @@ def _to_response(user: User) -> SettingsResponse:
         ibkr_host=s.ibkr_host,
         ibkr_port=s.ibkr_port,
         ibkr_client_id=s.ibkr_client_id,
+        has_binance_testnet_credentials=bool(
+            s.binance_testnet_api_key_encrypted and s.binance_testnet_api_secret_encrypted
+        ),
     )
 
 
@@ -41,6 +47,18 @@ def update_settings(
 ) -> SettingsResponse:
     s = user.settings
     updates = body.model_dump(exclude_unset=True, exclude_none=True)
+
+    if "trading_mode" in updates and updates["trading_mode"] not in _VALID_TRADING_MODES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"trading_mode non valido: {updates['trading_mode']}")
+
+    # I nomi dei campi della request (binance_testnet_api_key/_secret) non
+    # coincidono con le colonne del modello (suffisso _encrypted): il loop
+    # generico sotto non basta, e vanno cifrati prima di scrivere su DB.
+    if "binance_testnet_api_key" in updates:
+        s.binance_testnet_api_key_encrypted = encrypt_secret(updates.pop("binance_testnet_api_key"))
+    if "binance_testnet_api_secret" in updates:
+        s.binance_testnet_api_secret_encrypted = encrypt_secret(updates.pop("binance_testnet_api_secret"))
+
     for field, value in updates.items():
         setattr(s, field, value)
     db.commit()

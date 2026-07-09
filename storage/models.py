@@ -79,6 +79,12 @@ class UserSettings(Base):
     ibkr_port: Mapped[int] = mapped_column(default=7497)
     ibkr_client_id: Mapped[int] = mapped_column(default=1)
 
+    # Credenziali Binance Futures Testnet, cifrate a riposo (common/crypto.py)
+    # — a differenza di anthropic_api_key, una API secret con permessi di
+    # trading è più sensibile. Usate solo quando trading_mode="binance_testnet".
+    binance_testnet_api_key_encrypted: Mapped[str] = mapped_column(Text, default="")
+    binance_testnet_api_secret_encrypted: Mapped[str] = mapped_column(Text, default="")
+
     # Blob JSON: struttura identica alle rispettive sezioni di config/trading.yaml
     symbols_json: Mapped[str] = mapped_column(Text, default="{}")
     risk_limits_json: Mapped[str] = mapped_column(Text, default="{}")

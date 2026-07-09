@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { LoginPage } from './pages/Login'
 import { RegisterPage } from './pages/Register'
 import { SessionPage } from './pages/Session'
+import { SettingsPage } from './pages/Settings'
 
 function AppRoutes() {
   const { user } = useAuth()
@@ -18,6 +19,7 @@ function AppRoutes() {
         <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<SessionPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </>

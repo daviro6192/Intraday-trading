@@ -93,6 +93,11 @@ export function SessionPage() {
   }, [selectedDay])
 
   const isActive = status?.status === 'running' || status?.status === 'error'
+  // I numeri della sessione (trade eseguiti, P&L, fee/funding, orario di
+  // avvio) hanno senso solo mentre una sessione è davvero in corso: a
+  // sessione ferma appartengono ormai allo storico (sezione in basso), non
+  // devono restare visibili qui come se fossero ancora "correnti".
+  const sessionIsLive = currentStatus === 'running'
 
   useEffect(() => {
     if (isActive && pollRef.current === null) {
@@ -179,16 +184,18 @@ export function SessionPage() {
         <div className="stat-row">
           <div className="stat">
             <span className="stat-label">Trade eseguiti</span>
-            <span className="stat-value hero mono-num">{status?.trades_executed ?? 0}</span>
+            <span className="stat-value hero mono-num">{sessionIsLive ? status?.trades_executed ?? 0 : 0}</span>
           </div>
           <div className="stat">
             <span className="stat-label">Controvalore</span>
-            <span className="stat-value hero mono-num">${formatUsd(status?.current_equity)}</span>
+            <span className="stat-value hero mono-num">
+              {sessionIsLive ? `$${formatUsd(status?.current_equity)}` : '—'}
+            </span>
           </div>
           <div className="stat">
             <span className="stat-label">P&amp;L di sessione</span>
-            <span className={`stat-value hero mono-num ${pnlClass(status?.session_pnl)}`}>
-              {formatSigned(status?.session_pnl)}
+            <span className={`stat-value hero mono-num ${sessionIsLive ? pnlClass(status?.session_pnl) : ''}`}>
+              {sessionIsLive ? formatSigned(status?.session_pnl) : '—'}
             </span>
           </div>
         </div>
@@ -196,16 +203,18 @@ export function SessionPage() {
         <div className="stat-row stat-row-secondary">
           <div className="stat">
             <span className="stat-label">Fee pagate</span>
-            <span className="stat-value mono-num">${formatUsd(status?.fees_paid_today)}</span>
+            <span className="stat-value mono-num">{sessionIsLive ? `$${formatUsd(status?.fees_paid_today)}` : '—'}</span>
           </div>
           <div className="stat">
             <span className="stat-label">Funding pagato</span>
-            <span className="stat-value mono-num">${formatUsd(status?.funding_paid_today)}</span>
+            <span className="stat-value mono-num">
+              {sessionIsLive ? `$${formatUsd(status?.funding_paid_today)}` : '—'}
+            </span>
           </div>
           <div className="stat">
             <span className="stat-label">Avviata alle</span>
             <span className="stat-value mono-num">
-              {status?.started_at ? new Date(status.started_at).toLocaleString() : '—'}
+              {sessionIsLive && status?.started_at ? new Date(status.started_at).toLocaleString() : '—'}
             </span>
           </div>
         </div>

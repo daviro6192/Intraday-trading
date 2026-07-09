@@ -89,6 +89,15 @@ def run_fundamental_strategy_cycle(components: LiveComponents, state: SessionSta
         "strategy_views": [v.model_dump(mode="json") for v in state.strategy_views.values()],
     }
     state.risk_parameters = components.risk_review_agent.run(state.risk_parameters, performance_summary, context)
+    logger.info(
+        "Ciclo lento: risk review -> leva max=%.1fx, esposizione max=%.0f%%, min_profit_x_fee=%.2f, "
+        "simboli in pausa=%s, motivazione=%s",
+        state.risk_parameters.max_leverage,
+        state.risk_parameters.max_position_notional_pct * 100,
+        state.risk_parameters.min_profit_over_fees_multiple,
+        state.risk_parameters.paused_symbols,
+        state.risk_parameters.rationale,
+    )
 
     with components.session_factory() as db:
         persist_risk_parameters(db, session_id=state.db_session_id, risk_parameters=state.risk_parameters)

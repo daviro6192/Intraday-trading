@@ -1,74 +1,134 @@
-"""Costruisce una Pipeline per uno specifico utente della piattaforma web,
-leggendo le sue impostazioni dal DB (storage.models.UserSettings) invece
-della configurazione globale (config.settings/trading_config) usata da
-orchestrator/main.py per la CLI a singolo utente."""
+"""Costruisce i componenti live (agenti + broker + config) per uno specifico
+utente della piattaforma web, leggendo le sue impostazioni dal DB
+(storage.models.UserSettings)."""
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from agents.execution_agent import ExecutionAgent
+from agents.fundamental_agent import FundamentalAgent
 from agents.order_agent import OrderAgent
-from agents.risk_agent import RiskAgent
-from agents.sentiment_agent import SentimentAgent
+from agents.risk_agent import RiskReviewAgent
 from agents.strategy_agent import StrategyAgent
 from broker.base import BrokerClient
 from broker.paper_broker import PaperBroker
 from common.claude_client import ClaudeClient
-from orchestrator.pipeline import Pipeline
+from common.schemas import FeeSchedule, RiskParameters
+from config.settings import trading_config
 from storage.models import User, UserSettings
 
 
-def build_broker_for_user(user_settings: UserSettings) -> BrokerClient:
-    if user_settings.trading_mode == "live":
-        from broker.ibkr_client import IBKRClient
-
-        return IBKRClient(user_settings.ibkr_host, user_settings.ibkr_port, user_settings.ibkr_client_id)
-
-    broker = PaperBroker()
-    # Senza questo, ogni richiesta costruirebbe un simulatore vuoto da
-    # $100.000, perdendo la memoria dei trade precedenti tra un ciclo e
-    # l'altro (vedi commento su UserSettings.paper_broker_state_json).
+def build_broker_for_user(user_settings: UserSettings, fee_schedule: FeeSchedule) -> BrokerClient:
+    execution_config = trading_config["execution"]
+    broker = PaperBroker(
+        fee_schedule=fee_schedule,
+        starting_cash=execution_config["starting_cash_usdt"],
+        maintenance_margin_rate_pct=execution_config["maintenance_margin_rate_pct"],
+    )
+    # Senza questo, ogni sessione ricostruirebbe un simulatore vuoto,
+    # perdendo la memoria dei trade precedenti tra una sessione e l'altra.
     if user_settings.paper_broker_state_json:
         broker.load_state(json.loads(user_settings.paper_broker_state_json))
     return broker
 
 
 def save_paper_broker_state(broker: BrokerClient, user_settings: UserSettings) -> None:
-    """Se il broker è il PaperBroker, persiste cassa/posizioni/P&L correnti
-    su UserSettings. Va chiamato dopo ogni operazione che può aver piazzato
-    ordini (il chiamante è responsabile di fare il commit della sessione)."""
     if isinstance(broker, PaperBroker):
         user_settings.paper_broker_state_json = json.dumps(broker.export_state())
 
 
-def build_pipeline_for_user(user: User, session_factory: sessionmaker[Session]) -> Pipeline:
+def _default_risk_parameters(user_settings: UserSettings) -> RiskParameters:
+    if user_settings.risk_parameters_json:
+        return RiskParameters.model_validate_json(user_settings.risk_parameters_json)
+
+    risk_limits = json.loads(user_settings.risk_limits_json)
+    return RiskParameters(
+        max_leverage=risk_limits["max_leverage"],
+        max_position_notional_pct=risk_limits["max_exposure_per_symbol_pct"],
+        max_daily_loss_pct=risk_limits["max_daily_loss_pct"],
+        min_profit_over_fees_multiple=risk_limits["min_profit_over_fees_multiple"],
+        paused_symbols=[],
+        rationale="Parametri di default da trading.yaml (nessuna review precedente).",
+    )
+
+
+@dataclass
+class LiveComponents:
+    user_id: int
+    fundamental_agent: FundamentalAgent
+    strategy_agent: StrategyAgent
+    order_agent: OrderAgent
+    risk_review_agent: RiskReviewAgent
+    broker: BrokerClient
+    claude_client: ClaudeClient
+    symbols: dict[str, dict[str, str]]
+    static_risk_limits: dict
+    fee_schedule: FeeSchedule
+    cycles_config: dict
+    session_factory: sessionmaker[Session]
+    default_risk_parameters: RiskParameters
+
+
+def build_live_components_for_user(user: User, session_factory: sessionmaker[Session]) -> LiveComponents:
     user_settings = user.settings
     if user_settings is None:
         raise ValueError(f"Utente {user.id} senza impostazioni: mancato seed alla registrazione.")
 
     claude_client = ClaudeClient(api_key=user_settings.anthropic_api_key, model=user_settings.claude_model)
 
-    broker = build_broker_for_user(user_settings)
+    execution_config = trading_config["execution"]
+    fee_schedule = FeeSchedule(
+        maker_fee_pct=execution_config["maker_fee_pct"],
+        taker_fee_pct=execution_config["taker_fee_pct"],
+        funding_interval_hours=execution_config["funding_interval_hours"],
+        default_funding_rate_fallback_pct=execution_config["default_funding_rate_fallback_pct"],
+    )
+
+    broker = build_broker_for_user(user_settings, fee_schedule)
     broker.connect()
 
-    trading_config = {
-        "news_feeds": json.loads(user_settings.news_feeds_json),
-        "watchlists": json.loads(user_settings.watchlists_json),
-        "risk_limits": json.loads(user_settings.risk_limits_json),
-    }
+    risk_limits = json.loads(user_settings.risk_limits_json)
+    symbols = json.loads(user_settings.symbols_json)
 
-    return Pipeline(
-        sentiment_agent=SentimentAgent(claude_client),
-        strategy_agent=StrategyAgent(claude_client),
-        order_agent=OrderAgent(claude_client),
-        risk_agent=RiskAgent(claude_client, trading_config["risk_limits"]),
-        execution_agent=ExecutionAgent(broker),
+    order_agent = OrderAgent(
         broker=broker,
-        session_factory=session_factory,
-        trading_config=trading_config,
-        user_id=user.id,
-        claude_client=claude_client,
+        fee_schedule=fee_schedule,
+        default_leverage=execution_config["default_leverage"],
+        max_risk_per_trade_pct=risk_limits["max_risk_per_trade_pct"],
     )
+
+    return LiveComponents(
+        user_id=user.id,
+        fundamental_agent=FundamentalAgent(claude_client),
+        strategy_agent=StrategyAgent(claude_client),
+        order_agent=order_agent,
+        risk_review_agent=RiskReviewAgent(claude_client, risk_limits),
+        broker=broker,
+        claude_client=claude_client,
+        symbols=symbols,
+        static_risk_limits=risk_limits,
+        fee_schedule=fee_schedule,
+        cycles_config=trading_config["cycles"],
+        session_factory=session_factory,
+        default_risk_parameters=_default_risk_parameters(user_settings),
+    )
+
+
+def persist_live_state(
+    session_factory: sessionmaker[Session],
+    user_id: int,
+    broker: BrokerClient,
+    risk_parameters: RiskParameters,
+) -> None:
+    """Persiste lo stato del PaperBroker e gli ultimi RiskParameters su
+    UserSettings, così sopravvivono al termine della sessione corrente."""
+    with session_factory() as db:
+        user = db.get(User, user_id)
+        if user is None or user.settings is None:
+            return
+        save_paper_broker_state(broker, user.settings)
+        user.settings.risk_parameters_json = risk_parameters.model_dump_json()
+        db.commit()

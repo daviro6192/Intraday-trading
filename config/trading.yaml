@@ -1,55 +1,67 @@
-# Configurazione di trading: watchlist, limiti di rischio, sessioni di mercato, fonti dati.
+# Configurazione della piattaforma crypto continua: simboli tracciati, cadenze
+# dei due cicli (analisi lenta + esecuzione veloce), parametri di esecuzione
+# simulata (futures USDT-M perpetual su Binance) e limiti di rischio.
 # Tutti i valori sono modificabili senza toccare il codice.
 #
-# Perimetro attuale: solo crypto (tradabile 24/7, a differenza di azioni/forex
-# vincolati a orari di sessione). Le sezioni per azioni USA/EU-IT e forex sono
-# state rimosse per ora; per reintrodurle basta aggiungere di nuovo in
-# `watchlists` una voce con `market: US_EQUITY|EU_EQUITY|FOREX` (vedi
-# common/schemas.py::Market per i valori validi) e la relativa sessione in
-# `sessions` con lo stesso schema usato qui sotto per CRYPTO.
+# Perimetro: 3 simboli fissi/configurabili — un'ancora (Bitcoin), un top-10
+# (es. Solana), un "outsider" fast-grower. Il terzo slot è un placeholder,
+# cambialo liberamente in base a cosa vuoi seguire: non esiste ancora uno
+# screener automatico che lo scelga da solo (possibile miglioramento futuro).
 
-watchlists:
-  crypto:
-    market: CRYPTO
-    exchange: PAXOS
-    currency: USD
-    symbols: [BTC/USD, ETH/USD]
+symbols:
+  fixed:
+    symbol: BTC
+    coingecko_id: bitcoin
+    binance_perp: BTCUSDT
+  altcoin:
+    symbol: SOL
+    coingecko_id: solana
+    binance_perp: SOLUSDT
+  outsider:
+    symbol: INJ
+    coingecko_id: injective-protocol
+    binance_perp: INJUSDT
 
-# Orari di sessione in UTC, usati dallo scheduler per decidere quando far girare
-# il pre-market job (agenti 1-2) e il loop intraday (agenti 3-4-5) per ciascun mercato.
-sessions:
-  CRYPTO:
-    pre_market_utc: "00:00"
-    open_utc: "00:00"
-    close_utc: "23:59"
+cycles:
+  # Agente 1 (fondamentale) + Agente 2 (strategia): chiamano Claude, girano a
+  # bassa frequenza per tenere sotto controllo costo e latenza.
+  slow_cycle_interval_minutes: 15
+  # Agente 3 (ordini) + Agente 4 (gate di rischio deterministico): nessuna
+  # chiamata Claude, girano ad alta frequenza per abilitare centinaia di
+  # trade/giorno.
+  fast_cycle_interval_seconds: 5
 
-intraday_loop_interval_minutes: 10
+execution:
+  starting_cash_usdt: 100000.0
+  default_leverage: 3
+  # Commissioni stile Binance futures USDT-M (non ottenibili da un endpoint
+  # pubblico, sono account-specific: restano assunzioni qui).
+  maker_fee_pct: 0.0002
+  taker_fee_pct: 0.0004
+  funding_interval_hours: 8
+  # Usato solo se Binance non è raggiungibile al momento dell'accrual.
+  default_funding_rate_fallback_pct: 0.0001
+  maintenance_margin_rate_pct: 0.005
 
 risk_limits:
-  # Rischio massimo (stop-loss) per singolo trade, come frazione dell'equity del conto.
+  # Rischio massimo per singolo trade, come frazione dell'equity del conto.
   max_risk_per_trade_pct: 0.01
-  # Se la perdita giornaliera realizzata+aperta supera questa frazione dell'equity,
-  # il risk manager blocca nuovi ordini per il resto della giornata.
+  # Se la perdita giornaliera realizzata+aperta supera questa frazione
+  # dell'equity, il risk manager blocca nuovi ordini per il resto della giornata.
   max_daily_loss_pct: 0.03
-  # Numero massimo di posizioni aperte contemporaneamente.
-  max_concurrent_positions: 5
+  # Numero massimo di posizioni aperte contemporaneamente (sui 3 simboli tracciati).
+  max_concurrent_positions: 3
   # Esposizione massima (valore nozionale) su un singolo strumento, come frazione dell'equity.
   max_exposure_per_symbol_pct: 0.20
-  # Rapporto minimo reward/risk richiesto affinché una proposta possa essere approvata.
+  # Rapporto minimo reward/risk richiesto per un intent.
   min_reward_risk_ratio: 1.5
-
-news_feeds:
-  - name: Reuters Business
-    url: https://feeds.reuters.com/reuters/businessNews
-  - name: Investing.com News
-    url: https://www.investing.com/rss/news.rss
-  - name: ECB Press Releases
-    url: https://www.ecb.europa.eu/rss/press.html
-  - name: ANSA Economia
-    url: https://www.ansa.it/sito/notizie/economia/economia_rss.xml
+  # Leva massima consentita per posizione, indipendentemente da cosa propone Claude.
+  max_leverage: 10
+  # Il profitto atteso di un trade deve superare le fee di round-trip (+ funding
+  # stimato) moltiplicate per questo fattore, altrimenti l'intent viene bloccato.
+  min_profit_over_fees_multiple: 1.5
 
 claude:
-  sentiment_agent_model: claude-sonnet-5
+  fundamental_agent_model: claude-sonnet-5
   strategy_agent_model: claude-sonnet-5
-  order_agent_model: claude-sonnet-5
-  risk_agent_model: claude-sonnet-5
+  risk_review_agent_model: claude-sonnet-5

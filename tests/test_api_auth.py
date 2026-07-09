@@ -78,8 +78,8 @@ def test_new_user_gets_settings_seeded_from_trading_yaml(client: TestClient):
     assert settings_response.json()["has_api_key"] is False
     assert settings_response.json()["trading_mode"] == "paper"
 
-    watchlist_response = client.get("/api/watchlist")
-    assert "crypto" in watchlist_response.json()
+    symbols_response = client.get("/api/symbols")
+    assert symbols_response.json()["fixed"]["symbol"] == "BTC"
 
     risk_limits_response = client.get("/api/risk-limits")
     assert "max_risk_per_trade_pct" in risk_limits_response.json()

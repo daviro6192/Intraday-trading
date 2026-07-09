@@ -4,7 +4,6 @@ contratti tra agenti in common/schemas.py, che restano invariati)."""
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -52,21 +51,14 @@ class SettingsUpdateRequest(BaseModel):
     ibkr_client_id: int | None = None
 
 
-class PipelineRunSummary(BaseModel):
-    id: int
-    started_at: datetime
-    has_sentiment_report: bool
-    has_daily_strategy: bool
-    order_proposals_count: int
-    risk_decisions_count: int
-    execution_results_count: int
-
-
-class PipelineRunDetail(BaseModel):
-    id: int
-    started_at: datetime
-    sentiment_report: dict[str, Any] | None
-    daily_strategy: dict[str, Any] | None
-    order_proposals: list[dict[str, Any]]
-    risk_decisions: list[dict[str, Any]]
-    execution_results: list[dict[str, Any]]
+class SessionStatusResponse(BaseModel):
+    session_id: int | None
+    status: str  # not_started | running | stopped | interrupted | error
+    started_at: datetime | None
+    stopped_at: datetime | None
+    trades_executed: int
+    starting_equity: float | None
+    current_equity: float | None
+    session_pnl: float | None
+    fees_paid_today: float
+    funding_paid_today: float

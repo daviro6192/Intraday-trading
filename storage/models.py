@@ -1,8 +1,15 @@
-"""Modelli ORM per l'audit trail completo di ogni fase della pipeline: ogni
-esecuzione (PipelineRun) è collegata al report di sentiment, alla strategia,
-alle proposte di ordine, alle decisioni del risk manager e agli esiti di
-esecuzione che ne sono derivati. Include inoltre gli utenti della piattaforma
-web e le loro impostazioni personali (API key, watchlist, limiti di rischio)."""
+"""Modelli ORM per l'audit trail della piattaforma crypto continua.
+
+Due granularità distinte:
+- `PipelineRun`: un passaggio del ciclo LENTO (Agente 1 fondamentale + Agente 2
+  strategia), con le analisi/viste prodotte per ciascun simbolo tracciato.
+- `TradingSession`: una sessione di trading continua (dal click "Inizia" al
+  click "Fine"), a cui sono collegati sia i `PipelineRun` del ciclo lento sia
+  gli intent/decisioni/esecuzioni del ciclo VELOCE (Agente 3 + Agente 4), per
+  poter aggregare trade eseguiti/equity/P&L di sessione.
+
+Include inoltre gli utenti della piattaforma web e le loro impostazioni
+personali (API key, simboli tracciati, limiti di rischio)."""
 
 from __future__ import annotations
 
@@ -11,7 +18,7 @@ from datetime import datetime, timezone
 from sqlalchemy import DateTime, ForeignKey, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 
-from common.schemas import DailyStrategy, ExecutionResult, OrderProposal, RiskDecision, SentimentReport
+from common.schemas import ExecutionResult, FundamentalAnalysis, OrderIntent, RiskDecision, RiskParameters, StrategyView
 
 
 class Base(DeclarativeBase):
@@ -52,9 +59,8 @@ class UserSettings(Base):
     ibkr_client_id: Mapped[int] = mapped_column(default=1)
 
     # Blob JSON: struttura identica alle rispettive sezioni di config/trading.yaml
-    watchlists_json: Mapped[str] = mapped_column(Text, default="{}")
+    symbols_json: Mapped[str] = mapped_column(Text, default="{}")
     risk_limits_json: Mapped[str] = mapped_column(Text, default="{}")
-    news_feeds_json: Mapped[str] = mapped_column(Text, default="[]")
 
     # Token cumulativi usati dalla pipeline di questo utente, per stimare la
     # spesa Claude (Anthropic non espone il saldo prepagato reale via API
@@ -65,54 +71,60 @@ class UserSettings(Base):
     total_cache_read_tokens: Mapped[int] = mapped_column(default=0)
 
     # Stato persistito del PaperBroker (cassa, posizioni aperte, P&L
-    # realizzato oggi): senza questo, ogni chiamata API costruirebbe un
-    # simulatore vuoto da $100.000, perdendo la memoria dei trade precedenti
-    # tra un ciclo e l'altro. Vuoto finché non viene eseguito il primo ordine.
+    # realizzato/fee/funding oggi): senza questo, ogni ricostruzione dei
+    # componenti live perderebbe la memoria dei trade precedenti tra una
+    # sessione e l'altra. Vuoto finché non viene eseguito il primo ordine.
     paper_broker_state_json: Mapped[str] = mapped_column(Text, default="")
+
+    # Ultimi RiskParameters prodotti da RiskReviewAgent, per non ripartire
+    # sempre dai default di trading.yaml ad ogni nuova sessione.
+    risk_parameters_json: Mapped[str] = mapped_column(Text, default="")
 
     user: Mapped[User] = relationship(back_populates="settings")
 
 
+class TradingSession(Base):
+    """Una sessione di trading continua: dal click 'Inizia' (started_at) al
+    click 'Fine' (stopped_at). Aggrega i cicli lenti (PipelineRun) e veloci
+    (intent/decisioni/esecuzioni) per poter mostrare in dashboard trade
+    eseguiti, controvalore e P&L della sessione."""
+
+    __tablename__ = "trading_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # running | stopped | interrupted (persa per riavvio del processo) | error
+    status: Mapped[str] = mapped_column(Text, default="running")
+    starting_equity: Mapped[float] = mapped_column(default=0.0)
+
+    pipeline_runs: Mapped[list["PipelineRun"]] = relationship(back_populates="session")
+    order_intents: Mapped[list["OrderIntentRecord"]] = relationship(back_populates="session")
+    risk_decisions: Mapped[list["RiskDecisionRecord"]] = relationship(back_populates="session")
+    execution_results: Mapped[list["ExecutionResultRecord"]] = relationship(back_populates="session")
+    risk_parameters_history: Mapped[list["RiskParametersRecord"]] = relationship(back_populates="session")
+
+
 class PipelineRun(Base):
+    """Un passaggio del ciclo lento: Agente 1 (fondamentale) + Agente 2
+    (strategia) per tutti i simboli tracciati."""
+
     __tablename__ = "pipeline_runs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # Nullable: le esecuzioni da CLI (orchestrator/main.py, config globale) non
-    # sono legate a un utente della piattaforma web.
+    # Nullable: utile per test/uso senza una sessione attiva collegata.
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    session_id: Mapped[int | None] = mapped_column(ForeignKey("trading_sessions.id"), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
-    sentiment_reports: Mapped[list["SentimentReportRecord"]] = relationship(back_populates="run")
-    strategies: Mapped[list["DailyStrategyRecord"]] = relationship(back_populates="run")
-    order_proposals: Mapped[list["OrderProposalRecord"]] = relationship(back_populates="run")
-    risk_decisions: Mapped[list["RiskDecisionRecord"]] = relationship(back_populates="run")
-    execution_results: Mapped[list["ExecutionResultRecord"]] = relationship(back_populates="run")
+    session: Mapped[TradingSession | None] = relationship(back_populates="pipeline_runs")
+    fundamental_analyses: Mapped[list["FundamentalAnalysisRecord"]] = relationship(back_populates="run")
+    strategy_views: Mapped[list["StrategyViewRecord"]] = relationship(back_populates="run")
 
 
-class SentimentReportRecord(Base):
-    __tablename__ = "sentiment_reports"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_runs.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    payload: Mapped[str] = mapped_column(Text)
-
-    run: Mapped[PipelineRun] = relationship(back_populates="sentiment_reports")
-
-
-class DailyStrategyRecord(Base):
-    __tablename__ = "daily_strategies"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_runs.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    payload: Mapped[str] = mapped_column(Text)
-
-    run: Mapped[PipelineRun] = relationship(back_populates="strategies")
-
-
-class OrderProposalRecord(Base):
-    __tablename__ = "order_proposals"
+class FundamentalAnalysisRecord(Base):
+    __tablename__ = "fundamental_analyses"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_runs.id"))
@@ -120,79 +132,138 @@ class OrderProposalRecord(Base):
     symbol: Mapped[str] = mapped_column(Text)
     payload: Mapped[str] = mapped_column(Text)
 
-    run: Mapped[PipelineRun] = relationship(back_populates="order_proposals")
+    run: Mapped[PipelineRun] = relationship(back_populates="fundamental_analyses")
+
+
+class StrategyViewRecord(Base):
+    __tablename__ = "strategy_views"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_runs.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    symbol: Mapped[str] = mapped_column(Text)
+    payload: Mapped[str] = mapped_column(Text)
+
+    run: Mapped[PipelineRun] = relationship(back_populates="strategy_views")
+
+
+class OrderIntentRecord(Base):
+    """Collegato alla sessione (non al PipelineRun): il ciclo veloce di
+    Agente 3 non è legato a un passaggio del ciclo lento, gira in modo
+    indipendente per tutta la durata della sessione."""
+
+    __tablename__ = "order_intents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("trading_sessions.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    symbol: Mapped[str] = mapped_column(Text)
+    payload: Mapped[str] = mapped_column(Text)
+
+    session: Mapped[TradingSession] = relationship(back_populates="order_intents")
 
 
 class RiskDecisionRecord(Base):
     __tablename__ = "risk_decisions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_runs.id"))
+    session_id: Mapped[int] = mapped_column(ForeignKey("trading_sessions.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     symbol: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text)
     payload: Mapped[str] = mapped_column(Text)
 
-    run: Mapped[PipelineRun] = relationship(back_populates="risk_decisions")
+    session: Mapped[TradingSession] = relationship(back_populates="risk_decisions")
 
 
 class ExecutionResultRecord(Base):
     __tablename__ = "execution_results"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_runs.id"))
+    session_id: Mapped[int] = mapped_column(ForeignKey("trading_sessions.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     symbol: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text)
     payload: Mapped[str] = mapped_column(Text)
 
-    run: Mapped[PipelineRun] = relationship(back_populates="execution_results")
+    session: Mapped[TradingSession] = relationship(back_populates="execution_results")
 
 
-def persist_pipeline_run(
+class RiskParametersRecord(Base):
+    """Audit delle revisioni periodiche di RiskReviewAgent (Agente 4, cadenza
+    lenta): storico di come sono cambiati leva massima, esposizione, ecc."""
+
+    __tablename__ = "risk_parameters_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int | None] = mapped_column(ForeignKey("trading_sessions.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    payload: Mapped[str] = mapped_column(Text)
+
+    session: Mapped[TradingSession | None] = relationship(back_populates="risk_parameters_history")
+
+
+def persist_analysis_cycle(
     session: Session,
     *,
-    user_id: int | None = None,
-    sentiment_report: SentimentReport | None = None,
-    daily_strategy: DailyStrategy | None = None,
-    order_proposals: list[OrderProposal] | None = None,
-    risk_decisions: list[RiskDecision] | None = None,
-    execution_results: list[ExecutionResult] | None = None,
+    user_id: int | None,
+    session_id: int | None,
+    fundamental_analyses: list[FundamentalAnalysis],
+    strategy_views: list[StrategyView],
 ) -> int:
-    """Registra su DB l'audit trail di un ciclo di pipeline (anche parziale, se
-    si interrompe prima dell'esecuzione), scoped all'utente proprietario."""
-    run = PipelineRun(user_id=user_id)
+    """Registra su DB un passaggio del ciclo lento (Agente 1 + Agente 2)."""
+    run = PipelineRun(user_id=user_id, session_id=session_id)
     session.add(run)
     session.flush()  # per ottenere run.id
 
-    if sentiment_report is not None:
-        session.add(SentimentReportRecord(run_id=run.id, payload=sentiment_report.model_dump_json()))
+    for analysis in fundamental_analyses:
+        session.add(FundamentalAnalysisRecord(run_id=run.id, symbol=analysis.symbol, payload=analysis.model_dump_json()))
 
-    if daily_strategy is not None:
-        session.add(DailyStrategyRecord(run_id=run.id, payload=daily_strategy.model_dump_json()))
+    for view in strategy_views:
+        session.add(StrategyViewRecord(run_id=run.id, symbol=view.symbol, payload=view.model_dump_json()))
 
-    for proposal in order_proposals or []:
-        session.add(OrderProposalRecord(run_id=run.id, symbol=proposal.symbol, payload=proposal.model_dump_json()))
+    session.commit()
+    return run.id
 
-    for decision in risk_decisions or []:
+
+def persist_trade_tick(
+    session: Session,
+    *,
+    session_id: int,
+    order_intent: OrderIntent | None,
+    risk_decision: RiskDecision | None,
+    execution_result: ExecutionResult | None,
+) -> None:
+    """Registra su DB l'esito di un singolo tick del ciclo veloce (Agente 3 +
+    Agente 4). Chiamato solo quando è stato generato un intent (non ad ogni
+    tick "vuoto"), per tenere sotto controllo il volume di righe anche con
+    centinaia di trade/giorno."""
+    if order_intent is not None:
+        session.add(OrderIntentRecord(session_id=session_id, symbol=order_intent.symbol, payload=order_intent.model_dump_json()))
+
+    if risk_decision is not None:
         session.add(
             RiskDecisionRecord(
-                run_id=run.id,
-                symbol=decision.proposal.symbol,
-                status=decision.status.value,
-                payload=decision.model_dump_json(),
+                session_id=session_id,
+                symbol=risk_decision.intent.symbol,
+                status=risk_decision.status.value,
+                payload=risk_decision.model_dump_json(),
             )
         )
 
-    for result in execution_results or []:
+    if execution_result is not None:
         session.add(
             ExecutionResultRecord(
-                run_id=run.id,
-                symbol=result.symbol,
-                status=result.status.value,
-                payload=result.model_dump_json(),
+                session_id=session_id,
+                symbol=execution_result.symbol,
+                status=execution_result.status.value,
+                payload=execution_result.model_dump_json(),
             )
         )
 
     session.commit()
-    return run.id
+
+
+def persist_risk_parameters(session: Session, *, session_id: int | None, risk_parameters: RiskParameters) -> None:
+    session.add(RiskParametersRecord(session_id=session_id, payload=risk_parameters.model_dump_json()))
+    session.commit()

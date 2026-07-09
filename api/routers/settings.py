@@ -48,16 +48,16 @@ def update_settings(
     return _to_response(user)
 
 
-@router.get("/watchlist")
-def get_watchlist(user: User = Depends(get_current_user)) -> dict[str, Any]:
-    return json.loads(user.settings.watchlists_json)
+@router.get("/symbols")
+def get_symbols(user: User = Depends(get_current_user)) -> dict[str, Any]:
+    return json.loads(user.settings.symbols_json)
 
 
-@router.put("/watchlist")
-def update_watchlist(
+@router.put("/symbols")
+def update_symbols(
     body: dict[str, Any], user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
-    user.settings.watchlists_json = json.dumps(body)
+    user.settings.symbols_json = json.dumps(body)
     db.commit()
     return body
 

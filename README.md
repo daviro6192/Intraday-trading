@@ -1,30 +1,40 @@
-# Intraday Trading — piattaforma multi-agente
+# Intraday Trading — piattaforma di trading crypto continuo multi-agente
 
-Piattaforma di trading intraday automatizzata composta da 5 agenti che si
-scambiano dati strutturati in pipeline:
+Piattaforma di trading **crypto continuo** (paper trading su futures USDT-M
+perpetual simulati, dati reali da Binance) composta da 4 agenti:
 
-1. **Sentiment Agent** (`agents/sentiment_agent.py`) — analizza news
-   macroeconomiche/politiche (RSS) e produce un `SentimentReport`.
-2. **Strategy Agent** (`agents/strategy_agent.py`) — usa il report di
-   sentiment per generare la `DailyStrategy` del giorno.
-3. **Order Agent** (`agents/order_agent.py`) — dalla strategia e dai dati
-   tecnici correnti genera `OrderProposal` (buy/sell, entry/stop/take-profit).
-4. **Risk Agent** (`agents/risk_agent.py`) — valuta ogni proposta contro
-   limiti di rischio configurati e il giudizio qualitativo di Claude,
-   producendo `RiskDecision`.
-5. **Execution Agent** (`agents/execution_agent.py`) — piazza gli ordini
-   approvati su Interactive Brokers (o sul simulatore interno) come bracket
-   order (entry + stop-loss + take-profit).
+1. **Fundamental Agent** (`agents/fundamental_agent.py`) — analizza
+   **esclusivamente fondamentali crypto** (market cap/rank, supply,
+   distanza da ATH/ATL, variazioni 24h/7d/30d/1y da CoinGecko): niente
+   sentiment/news/rumor. Produce una `FundamentalAnalysis` per ciascuno dei
+   simboli tracciati. Gira sul ciclo **lento** (chiama Claude).
+2. **Strategy Agent** (`agents/strategy_agent.py`) — trasforma l'analisi
+   fondamentale in una `StrategyView` per simbolo (direzione long/short/flat,
+   conviction, condizione di invalidazione), mantenendo continuità con la
+   vista precedente. Stesso ciclo lento dell'Agente 1, si riattiva subito dopo.
+3. **Order Agent** (`agents/order_agent.py`) — **meccanico, nessuna chiamata
+   Claude**: apre/chiude posizioni long/short in base alla direzione
+   dell'Agente 2 e a una conferma tecnica (incrocio EMA veloce/lenta su
+   klines Binance). Gira sul ciclo **veloce** (secondi), per sostenere
+   centinaia di trade/giorno.
+4. **Risk Agent** (`agents/risk_agent.py`) — a due velocità: un gate
+   **deterministico** (`evaluate_trade_risk`, nessun Claude) gira ad ogni
+   singolo trade nel ciclo veloce e verifica leva, esposizione, perdita
+   giornaliera e **costi di transazione** (blocca un trade se il profitto
+   atteso non copre le fee di round-trip + funding stimato); una
+   `RiskReviewAgent` Claude gira sul ciclo lento e aggiorna i parametri di
+   rischio (può solo restringerli, mai allargarli oltre i tetti di
+   `trading.yaml`).
 
-Gli agenti 1-4 chiamano l'API Claude con output strutturato (validato con
-Pydantic); l'orchestratore (`orchestrator/pipeline.py`) li incatena e registra
-un audit trail completo su DB ad ogni ciclo.
+L'orchestrazione (`orchestrator/cycles.py` + `orchestrator/session_manager.py`)
+fa girare i due cicli in background per tutta la durata di una **sessione di
+trading** (avviata/fermata via `POST /api/session/start` / `/stop`), con un
+audit trail completo su DB.
 
-> ⚠️ **Rischio finanziario reale**: in modalità `live` questo sistema piazza
-> ordini reali con denaro reale su un conto Interactive Brokers. Nessuna
-> componente di questo progetto costituisce consulenza finanziaria. Usare la
-> modalità `paper` per validare a lungo la pipeline prima di considerare
-> l'uso di capitale reale, e comunque a proprio rischio.
+> ⚠️ **Solo paper trading per ora**: nessun ordine reale, nessuna API key
+> Binance richiesta. I prezzi/funding vengono letti dall'API pubblica di
+> Binance per realismo, ma l'esecuzione resta simulata. Nessuna componente di
+> questo progetto costituisce consulenza finanziaria.
 
 ## Setup
 
@@ -46,32 +56,13 @@ cp .env.example .env   # e compilare ANTHROPIC_API_KEY a mano
 > riutilizzabile dall'abbonamento Claude.ai/Claude Code in un'app di terze
 > parti come questa.
 
-## Esecuzione
-
-```bash
-# Un ciclo completo (pre-market + intraday) in modalità paper, con il
-# simulatore interno come broker (nessuna dipendenza esterna)
-python -m orchestrator.main --once --mode paper
-
-# Scheduler continuo (pre-market giornaliero + loop intraday periodico)
-python -m orchestrator.main --mode paper
-
-# Come sopra ma eseguendo gli ordini simulati su un vero account paper IBKR
-# (richiede IB Gateway/TWS in esecuzione e raggiungibile su IBKR_HOST:IBKR_PORT)
-python -m orchestrator.main --mode paper --ibkr-paper
-
-# Modalità live: ordini reali. Richiede TRADING_MODE=live esplicito.
-python -m orchestrator.main --mode live
-```
-
 ## Piattaforma web (multi-utente)
 
-Oltre alla CLI a singolo utente/configurazione globale, il progetto include
-una piattaforma web con login (`api/`, backend FastAPI + `frontend/`, SPA
-React/Vite): ogni utente registrato ha la propria API key Anthropic,
-watchlist, limiti di rischio e connessione IBKR, isolate dalle altre, e può
-avviare i cicli della pipeline e consultarne l'audit trail da un pannello nel
-browser invece che da terminale.
+Login (`api/`, backend FastAPI + `frontend/`, SPA React/Vite — **il
+frontend è in fase di riprogettazione per il nuovo modello a sessione
+continua, non ancora allineato alle API descritte qui sotto**): ogni utente
+registrato ha la propria API key Anthropic, simboli tracciati e limiti di
+rischio, isolati dagli altri.
 
 ### Avvio rapido con un solo comando
 
@@ -81,30 +72,11 @@ Su **macOS/Linux**, o su Windows da **Git Bash**/WSL:
 ./start.sh
 ```
 
-Su **Windows da PowerShell** (`./start.sh` non funziona in PowerShell, non è
-in grado di eseguire script bash):
+Su **Windows da PowerShell**:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\start.ps1
 ```
-
-(Il flag `-ExecutionPolicy Bypass` serve solo a permettere l'esecuzione dello
-script per questa sessione, senza cambiare impostazioni globali del sistema.)
-
-La prima volta lo script crea l'ambiente virtuale, installa le dipendenze
-(Python e frontend), genera un `.env` con una `SECRET_KEY` casuale se non
-esiste, builda il frontend e avvia tutto su un solo processo/porta. Alla fine
-stampa due indirizzi:
-
-- `http://localhost:8000` — da questo computer;
-- `http://<ip-locale>:8000` — da smartphone o un altro dispositivo sulla
-  stessa rete Wi-Fi (utile per aprirla dal telefono senza installare nulla).
-
-> Nota: lo script mette in ascolto il server su tutte le interfacce di rete
-> (`0.0.0.0`), non solo su `localhost`, per essere raggiungibile dal telefono.
-> Va bene su una rete Wi-Fi domestica fidata; non esporlo su reti pubbliche o
-> su internet così com'è (nessun HTTPS, solo il login applicativo a
-> protezione).
 
 ### Sviluppo (due processi separati, con hot-reload)
 
@@ -113,40 +85,36 @@ stampa due indirizzi:
 source .venv/bin/activate
 uvicorn api.main:app --reload
 
-# terminale 2: frontend su :5173 (proxy /api -> :8000, vedi frontend/vite.config.ts)
-cd frontend
-npm install
-npm run dev
+# terminale 2: frontend su :5173 (proxy /api -> :8000)
+cd frontend && npm install && npm run dev
 ```
 
-Apri `http://localhost:5173`, registra un account (username + password) e
-vai in **Impostazioni** per inserire la tua Anthropic API key e configurare
-IBKR se necessario. Da **Dashboard** puoi lanciare manualmente il ciclo
-pre-market e il ciclo intraday e vedere la cronologia delle run.
+### API principali
 
-### Uso locale con un solo processo
+- `POST /api/session/start` — avvia una sessione di trading continua per
+  l'utente corrente (avvia i due cicli in background). 409 se già in corso.
+- `POST /api/session/stop` — ferma la sessione corrente in modo pulito.
+- `GET /api/session/status` — aggregati della sessione (più recente se non
+  ce n'è una attiva): trade eseguiti, controvalore corrente, P&L di sessione,
+  fee/funding pagati.
+- `GET/PUT /api/symbols`, `GET/PUT /api/risk-limits`, `GET/PUT /api/settings`
+  — configurazione utente.
+- `GET /api/account/state` — stato del conto (broker), senza richiedere una
+  sessione attiva.
+- `GET /api/usage` — spesa Claude stimata dai token consumati (non è il
+  saldo prepagato reale, non esposto via API da Anthropic).
 
-```bash
-cd frontend && npm install && npm run build && cd ..
-uvicorn api.main:app
-```
-
-Dopo la build, `api/main.py` serve anche i file statici della SPA da
-`frontend/dist`: un solo comando, un solo processo, raggiungibile su
-`http://localhost:8000`.
-
-### Note di sicurezza e limiti di questa prima versione
+### Note di sicurezza e limiti di questa versione
 
 - Le password sono hashate (bcrypt), mai salvate in chiaro.
-- La API key Anthropic e le credenziali IBKR sono salvate in chiaro nel DB
-  locale (stesso livello di fiducia di un `.env` oggi); cifratura a riposo
-  non è coperta da questa versione.
-- La registrazione è aperta (nessun invito), coerente con l'uso pensato solo
-  in locale sulla propria macchina; da rivedere se in futuro esposta in rete.
-- I cicli pipeline si avviano manualmente dai pulsanti della dashboard: non
-  c'è ancora scheduling automatico per-utente in background (fast-follow).
-- Ogni utente deve comunque avere il proprio IB Gateway/TWS in esecuzione
-  raggiungibile con le proprie credenziali per l'esecuzione reale IBKR.
+- La API key Anthropic è salvata in chiaro nel DB locale (stesso livello di
+  fiducia di un `.env` oggi); cifratura a riposo non è coperta da questa versione.
+- Il meccanismo di sessione è **in-memory, single-process**: un riavvio del
+  server interrompe le sessioni attive (vengono marcate `interrupted` su DB
+  al riavvio, non riprendono automaticamente).
+- Il frontend (`frontend/`) non è ancora stato aggiornato per il nuovo
+  modello a sessione continua: le pagine esistenti chiamano endpoint che non
+  esistono più (`/api/pipeline/*`, `/api/watchlist`).
 
 ## Test
 
@@ -154,78 +122,80 @@ Dopo la build, `api/main.py` serve anche i file statici della SPA da
 pytest
 ```
 
-La suite copre: parsing/validazione dei singoli agenti (Claude mockato),
-i guardrail numerici del risk manager (compresi tentativi espliciti di
-"bypass" da parte di un LLM finto, per verificare che il codice li blocchi
-comunque), un'esecuzione end-to-end della pipeline con `PaperBroker`, e
-l'API web (registrazione/login, isolamento dei dati per utente, trigger
-della pipeline con Claude/dati di mercato finti).
+La suite copre: parsing/validazione dei singoli agenti (Claude mockato), il
+timing meccanico dell'Order Agent (nessun Claude), i guardrail deterministici
+del Risk Agent (leva, esposizione, fee-awareness, perdita giornaliera —
+compresi tentativi espliciti di "bypass" da parte di un LLM finto sulla
+review periodica), il `PaperBroker` (leva/margine/funding/fee/liquidazione),
+i due cicli come funzioni pure (`test_session_cycles.py`), e uno smoke test
+end-to-end via API della sessione completa: avvio, trade reali in
+background, aggregati, stop pulito (`test_api_session.py`) — tutti con
+Claude/Binance/CoinGecko mockati (nessuna rete reale nei test).
 
 ## Configurazione
 
-- `.env` (da `.env.example`): API key Claude, modalità di trading, credenziali
-  di connessione a IB Gateway, URL del database.
-- `config/trading.yaml`: watchlist per mercato, orari di sessione, limiti di
-  rischio (`risk_limits`), fonti RSS di news. **Perimetro attuale: solo
-  crypto** (tradabile 24/7); la struttura supporta anche azioni USA/EU-IT e
-  forex, vedi il commento in cima al file per come reintrodurle.
+- `.env` (da `.env.example`): API key Claude, URL del database.
+- `config/trading.yaml`:
+  - `symbols`: i 3 simboli tracciati — `fixed` (Bitcoin), `altcoin` (un
+    top-10, es. Solana), `outsider` (un fast-grower, placeholder
+    configurabile: non c'è ancora uno screener automatico che lo scelga).
+    Ciascuno con `symbol`, `coingecko_id` (fondamentali) e `binance_perp`
+    (coppia futures USDT-M per prezzo/klines/funding).
+  - `cycles`: `slow_cycle_interval_minutes` (Agente 1+2, chiama Claude) e
+    `fast_cycle_interval_seconds` (Agente 3+4, meccanico).
+  - `execution`: cassa iniziale, leva di default, commissioni maker/taker
+    (assunte — non ottenibili da un endpoint pubblico Binance), intervallo di
+    funding, maintenance margin.
+  - `risk_limits`: tetti massimi non superabili dal giudizio dell'LLM.
 
 ### Limiti di rischio (`risk_limits` in trading.yaml)
 
-Questi limiti sono applicati **in modo deterministico nel codice**
-(`agents/risk_agent.py::evaluate_hard_limits`), non solo tramite prompt: il
-giudizio di Claude può solo essere più prudente (ridurre ulteriormente una
-size o rifiutare), mai superarli.
+Applicati **in modo deterministico nel codice**
+(`agents/risk_agent.py::evaluate_trade_risk`), non solo tramite prompt: il
+giudizio di Claude (`RiskReviewAgent`, ciclo lento) può solo restringere
+questi tetti, mai superarli — e chiudere una posizione (`reduce_only`) non
+viene **mai** bloccato dal gate, a nessuna condizione.
 
 | Chiave | Significato |
 |---|---|
-| `max_risk_per_trade_pct` | Rischio massimo (size × distanza dallo stop) per singolo trade, come frazione dell'equity |
-| `max_daily_loss_pct` | Oltre questa perdita giornaliera (realizzata + aperta) il trading si blocca per il resto della giornata |
-| `max_concurrent_positions` | Numero massimo di posizioni aperte contemporaneamente |
-| `max_exposure_per_symbol_pct` | Esposizione nozionale massima su un singolo strumento, come frazione dell'equity |
-| `min_reward_risk_ratio` | Rapporto reward/risk minimo richiesto per approvare una proposta |
+| `max_risk_per_trade_pct` | Rischio massimo (size × distanza dallo stop) per singolo trade, come frazione dell'equity — usato dall'Order Agent per dimensionare la size |
+| `max_daily_loss_pct` | Oltre questa perdita giornaliera (realizzata + aperta) il gate blocca nuove aperture per il resto della giornata |
+| `max_exposure_per_symbol_pct` | Esposizione nozionale massima su un singolo simbolo, come frazione dell'equity |
+| `min_reward_risk_ratio` | Rapporto reward/risk minimo per il take-profit interno calcolato dall'Order Agent |
+| `max_leverage` | Leva massima consentita per posizione |
+| `min_profit_over_fees_multiple` | Il profitto atteso di un trade deve superare le fee di round-trip (+ funding stimato) di questo fattore, altrimenti il gate lo blocca |
 
 ## Broker
 
-- **PaperBroker** (`broker/paper_broker.py`): simulatore, default per
-  sviluppo/test e **unico broker in uso al momento** (l'esecuzione reale sul
-  crypto non è ancora collegata a una piattaforma specifica — in valutazione
-  un exchange con API ufficiale, es. Binance). Pensato per essere realistico
-  quanto basta da poter validare una strategia nell'arco di più giorni:
-  - i fill usano il prezzo di mercato corrente (`data_sources/market_data.py`)
-    con una piccola escursione simulata, non il prezzo proposto alla cieca;
-  - le posizioni aperte vengono rivalutate al prezzo corrente ad ogni
-    lettura dello stato del conto (equity e P&L si muovono con il mercato
-    tra un ciclo e l'altro, non restano congelati al prezzo di ingresso);
-  - prezzo medio ponderato e P&L realizzato corretti quando si aggiunge o si
-    chiude una posizione;
-  - **lo stato (cassa, posizioni, P&L) è persistito per utente** in
-    `UserSettings.paper_broker_state_json`: senza questo, ogni richiesta
-    HTTP avrebbe ricreato un simulatore vuoto da $100.000, perdendo la
-    memoria dei trade precedenti — fondamentale per poter osservare
-    l'andamento del portafoglio nei giorni successivi invece che ripartire
-    da zero ad ogni ricarica della pagina.
-- **IBKRClient** (`broker/ibkr_client.py`): esecuzione reale su Interactive
-  Brokers via [`ib_async`](https://github.com/ib-api-reloaded/ib_async),
-  richiede IB Gateway o TWS in esecuzione. Porta paper di default: `7497`
-  (TWS) / `4002` (IB Gateway); la modalità live richiede `TRADING_MODE=live`
-  esplicito in `.env`. Per il crypto copre solo poche monete (BTC/ETH/LTC/BCH
-  via Paxos, non in tutte le giurisdizioni). Non è stato possibile testare
-  questa integrazione contro un vero IB Gateway in questo ambiente di
-  sviluppo: verificarla con un conto paper IBKR reale prima di qualunque uso
-  in produzione.
-- **Trade Republic**: valutato e scartato. Non espone un'API ufficiale per il
-  trading automatizzato; le uniche librerie esistenti sono reverse-engineering
-  non ufficiale dell'app, che violano i loro Termini di Servizio — non
-  utilizzabili in sicurezza per questo progetto.
+- **PaperBroker** (`broker/paper_broker.py`): simulatore di futures USDT-M
+  perpetual, **unico broker in uso**. Isolated margin per posizione (leva
+  fissata all'apertura), fee su ogni fill, funding periodico basato sul
+  tasso reale di Binance (fallback configurato se non raggiungibile),
+  liquidazione simulata se il prezzo di mark supera il prezzo di
+  liquidazione stimato. Prezzi/funding da `data_sources/binance_market_data.py`
+  (endpoint pubblici `fapi.binance.com`, nessuna API key richiesta).
+  Lo stato (cassa, posizioni, P&L, fee/funding accumulati) è persistito per
+  utente in `UserSettings.paper_broker_state_json`.
+- **IBKRClient** (`broker/ibkr_client.py`): **legacy, non collegato alla
+  pipeline** — scritto per bracket order azionari con stop/take-profit
+  obbligatori, un modello diverso dalle entrate/uscite dirette long/short di
+  questa versione. Resta nel repository come riferimento; andrebbe riscritto
+  se in futuro si tornerà all'esecuzione reale.
+- **Binance reale**: non collegato (solo dati di mercato pubblici, esecuzione
+  ancora simulata). Valutato per un fast-follow quando si vorrà passare a
+  ordini reali (richiederebbe API key Binance, gestione sicura delle
+  credenziali, e verifica che i futures perpetual siano disponibili nella
+  giurisdizione di deploy — Binance li blocca per IP di alcuni paesi).
 
 ## Limiti noti / prossimi passi
 
-- Le fonti RSS di default in `trading.yaml` sono un punto di partenza,
-  aggiungerne altre secondo necessità.
-- Lo scheduler (`orchestrator/scheduler.py`) usa un'unica finestra
-  pre-market giornaliera (la più precoce tra i mercati configurati) e un
-  loop intraday che si attiva se almeno un mercato configurato è aperto;
-  non pianifica ogni mercato in modo indipendente.
-- Nessun meccanismo di persistenza delle credenziali IBKR oltre `.env`: in
-  produzione va gestito con un secret manager.
+- Il frontend non è ancora aggiornato per il nuovo modello a sessione
+  continua (in corso in un passaggio successivo).
+- Nessuno screener automatico per il simbolo "outsider" (terzo slot in
+  `config/trading.yaml`): va scelto e aggiornato manualmente per ora.
+- Il trigger di timing dell'Order Agent (incrocio EMA) è una scelta di
+  design minimale per abilitare trading ad alta frequenza senza Claude ad
+  ogni tick: sostituibile con altra logica meccanica senza toccare il resto
+  dell'architettura.
+- Sessioni in-memory single-process: non sopravvivono a un riavvio del
+  server (vedi nota sopra).

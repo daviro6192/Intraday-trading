@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from common.schemas import AccountState, Market, OrderProposal, OrderSide, OrderType
+from common.schemas import AccountState, OrderIntent, OrderSide
 
 
 class FakeClaudeClient:
@@ -53,27 +53,26 @@ def fake_claude_client_factory():
     return _factory
 
 
-def make_order_proposal(
-    symbol: str = "AAPL",
-    market: Market = Market.US_EQUITY,
+def make_order_intent(
+    symbol: str = "BTCUSDT",
     side: OrderSide = OrderSide.BUY,
-    entry_price: float = 100.0,
-    stop_loss: float = 98.0,
-    take_profit: float = 106.0,
-    proposed_quantity: float = 10.0,
-    confidence: float = 0.7,
-) -> OrderProposal:
-    return OrderProposal(
+    quantity: float = 1.0,
+    leverage: float = 3.0,
+    reduce_only: bool = False,
+    reference_price: float = 100.0,
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
+) -> OrderIntent:
+    return OrderIntent(
         symbol=symbol,
-        market=market,
         side=side,
-        order_type=OrderType.LIMIT,
-        entry_price=entry_price,
+        quantity=quantity,
+        leverage=leverage,
+        reduce_only=reduce_only,
+        reference_price=reference_price,
         stop_loss=stop_loss,
         take_profit=take_profit,
-        proposed_quantity=proposed_quantity,
-        confidence=confidence,
-        rationale="setup di test",
+        reason="setup di test",
     )
 
 

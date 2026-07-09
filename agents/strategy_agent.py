@@ -1,33 +1,39 @@
-"""Agente 2: usa il report di sentiment per generare la strategia operativa
-del giorno e la propone all'Agente 3 (proposte di ordine)."""
+"""Agente 2: mantiene una vista di strategia per simbolo (long/short/flat),
+aggiornata di continuo in base all'ultima analisi fondamentale e alla propria
+vista precedente (continuità: non ribaltare bias senza un cambiamento
+materiale nei fondamentali). Alimenta l'Agente 3 (ordini)."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from agents.base import Agent
 from common.claude_client import ClaudeClient, json_dumps_compact
-from common.schemas import DailyStrategy, SentimentReport
+from common.schemas import FundamentalAnalysis, StrategyView, StrategyViewBatch
 
 SYSTEM_PROMPT = """\
-Sei uno stratega di trading intraday. Ricevi il report di sentiment di mercato
-prodotto da un altro agente e l'elenco degli strumenti disponibili (azioni
-USA, azioni EU/IT, forex, crypto), organizzati per mercato.
+Sei uno stratega di trading sistematico crypto. Ricevi l'analisi
+fondamentale più recente per un insieme fisso di simboli (prodotta da un
+altro agente) e le tue stesse viste di strategia della chiamata precedente
+(se esistono).
 
-Il tuo compito è produrre la strategia operativa per la giornata odierna:
-- stabilisci la propensione al rischio complessiva della giornata (bassa,
-  media, alta) in base al contesto di sentiment ed eventi rilevanti;
-- seleziona un sottoinsieme ragionevole di strumenti dalla watchlist fornita
-  (non è necessario includerli tutti) assegnando a ciascuno un bias
-  (bullish/bearish/neutral), una motivazione concreta legata al sentiment o ai
-  dati disponibili, e un setup/timeframe suggerito per l'intraday;
-- se il contesto è troppo incerto o rischioso (es. eventi macro imminenti ad
-  alto impatto), è legittimo proporre una propensione al rischio bassa o una
-  watchlist ridotta/vuota.
+Il tuo compito è produrre/aggiornare, per ciascun simbolo, una vista di
+strategia operativa:
+- direction: long, short o flat. Deve riflettere il bias strutturale
+  dell'analisi fondamentale più recente;
+- conviction: quanto sei convinto di questa direzione (0-1);
+- invalidation_condition: una condizione esplicita e verificabile (es. "lo
+  score fondamentale scende sotto -0.2" oppure "il prezzo perde il livello
+  di supporto strutturale") che, se si verifica, invaliderebbe questa vista
+  e dovrebbe far chiudere eventuali posizioni aperte in questa direzione;
+- rationale: motivazione concisa.
 
-La strategia deve essere operativa e specifica, non generica: verrà usata da
-un altro agente per generare proposte di ordine concrete. Rispondi
-esclusivamente tramite il tool fornito.
+Principio di continuità: non ribaltare la direzione di un simbolo rispetto
+alla tua vista precedente a meno che i fondamentali non siano cambiati in
+modo materiale. Piccole oscillazioni dello score non giustificano un
+cambio di direzione: preferisci stabilità a meno che il cambiamento sia
+chiaro. Se non hai una vista precedente per un simbolo, costruiscine una
+da zero in base ai soli fondamentali correnti.
+
+Rispondi esclusivamente tramite il tool fornito.
 """
 
 
@@ -35,15 +41,15 @@ class StrategyAgent(Agent):
     def __init__(self, claude_client: ClaudeClient) -> None:
         super().__init__(claude_client, SYSTEM_PROMPT)
 
-    def run(self, sentiment_report: SentimentReport, watchlists: dict) -> DailyStrategy:
+    def run(
+        self, fundamentals: list[FundamentalAnalysis], previous_views: list[StrategyView]
+    ) -> list[StrategyView]:
         user_message = (
-            "Report di sentiment di mercato:\n"
-            f"{sentiment_report.model_dump_json(indent=2)}\n\n"
-            "Watchlist di strumenti disponibili per mercato:\n"
-            f"{json_dumps_compact(watchlists)}\n\n"
-            "Genera la strategia operativa per la giornata odierna."
+            "Analisi fondamentale più recente per i simboli tracciati:\n"
+            f"{json_dumps_compact([f.model_dump(mode='json') for f in fundamentals])}\n\n"
+            "Tue viste di strategia precedenti (lista vuota se è la prima esecuzione):\n"
+            f"{json_dumps_compact([v.model_dump(mode='json') for v in previous_views])}\n\n"
+            "Produci/aggiorna la vista di strategia per ciascun simbolo presente nell'analisi fondamentale."
         )
-        strategy = self._run_structured(user_message, DailyStrategy)
-        strategy.strategy_date = datetime.now(timezone.utc)
-        strategy.sentiment_summary = strategy.sentiment_summary or sentiment_report.macro_summary
-        return strategy
+        batch = self._run_structured(user_message, StrategyViewBatch)
+        return batch.views

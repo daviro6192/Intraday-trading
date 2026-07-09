@@ -120,12 +120,18 @@ def test_ensure_symbol_configured_rejects_on_other_margin_error(broker, monkeypa
 
 
 def test_place_order_successful_fill(broker, monkeypatch):
+    """La fee è quella reale letta da Binance (userTrades), interrogata
+    anche per le aperture — mai stimata dalla FeeSchedule configurata a
+    meno che quella chiamata fallisca (vedi test dedicato più sotto)."""
     monkeypatch.setattr(broker, "_ensure_symbol_configured", lambda symbol, leverage: None)
     monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty, round_up=False: qty)
 
     def fake_signed_request(method, path, params):
         if path == "/fapi/v1/order":
             return {"orderId": 999, "status": "FILLED", "executedQty": "0.01", "avgPrice": "60000.5"}
+        if path == "/fapi/v1/userTrades":
+            assert params["orderId"] == 999
+            return [{"commission": "0.24", "realizedPnl": "0.0"}]
         raise AssertionError(f"unexpected call to {path}")
 
     monkeypatch.setattr(broker, "_signed_request", fake_signed_request)
@@ -137,7 +143,26 @@ def test_place_order_successful_fill(broker, monkeypatch):
     assert result.filled_quantity == pytest.approx(0.01)
     assert result.avg_fill_price == pytest.approx(60000.5)
     assert result.realized_pnl is None  # apertura: nessun P&L realizzato
-    assert result.fee > 0  # stimata dalla FeeSchedule
+    assert result.fee == pytest.approx(0.24)  # reale da Binance, non stimata
+
+
+def test_place_order_falls_back_to_estimated_fee_when_user_trades_unavailable_on_open(broker, monkeypatch):
+    monkeypatch.setattr(broker, "_ensure_symbol_configured", lambda symbol, leverage: None)
+    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty, round_up=False: qty)
+
+    def fake_signed_request(method, path, params):
+        if path == "/fapi/v1/order":
+            return {"orderId": 999, "status": "FILLED", "executedQty": "0.01", "avgPrice": "60000.5"}
+        if path == "/fapi/v1/userTrades":
+            return None
+        raise AssertionError(f"unexpected call to {path}")
+
+    monkeypatch.setattr(broker, "_signed_request", fake_signed_request)
+
+    result = broker.place_order("BTCUSDT", OrderSide.BUY, 0.01, 3.0, reference_price=60000.0)
+
+    assert result.status == ExecutionStatus.FILLED
+    assert result.fee > 0  # ultima risorsa: stimata dalla FeeSchedule configurata
 
 
 def test_place_order_known_rejection_code(broker, monkeypatch):

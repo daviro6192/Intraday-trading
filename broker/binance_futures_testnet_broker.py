@@ -381,25 +381,27 @@ class BinanceFuturesTestnetBroker:
     def _fee_and_realized_pnl(
         self, symbol: str, order_id: int | None, reduce_only: bool, filled_quantity: float, avg_fill_price: float
     ) -> tuple[float, float | None]:
-        estimated_fee = filled_quantity * avg_fill_price * self._fee_schedule.taker_fee_pct
-
-        if not reduce_only:
-            # Scelta deliberata: interrogare userTrades anche per le
-            # aperture raddoppierebbe le chiamate firmate senza servire a
-            # nessuna decisione a valle — la preoccupazione è sul P&L di
-            # CHIUSURA (vedi sotto), non su quello di apertura (sempre None).
-            return estimated_fee, None
-
+        """Fee e P&L realizzato reali, letti da Binance (/fapi/v1/userTrades,
+        sommati sui fill effettivi dell'ordine — un MARKET order può
+        produrne più di uno) sia per le aperture che per le chiusure: mai
+        stimati dalla FeeSchedule configurata a meno che questa chiamata
+        fallisca per un problema di rete, unico caso in cui si ripiega su
+        una stima come ultima risorsa (l'ordine è comunque già eseguito sul
+        vero exchange, non deve mai fallire solo per questo)."""
         trades = self._signed_request("GET", "/fapi/v1/userTrades", {"symbol": symbol, "orderId": order_id})
         if trades is None or not isinstance(trades, list) or not trades:
+            estimated_fee = filled_quantity * avg_fill_price * self._fee_schedule.taker_fee_pct
             logger.warning(
-                "BinanceFuturesTestnetBroker: impossibile leggere userTrades per l'ordine %s, fee/P&L stimati",
+                "BinanceFuturesTestnetBroker: impossibile leggere userTrades per l'ordine %s, fee stimata dalla FeeSchedule configurata",
                 order_id,
             )
             return estimated_fee, None
 
         total_fee = sum(float(t.get("commission", 0.0)) for t in trades)
-        total_realized_pnl = sum(float(t.get("realizedPnl", 0.0)) for t in trades)
+        # Un'apertura non realizza mai P&L: Binance lo riporterebbe comunque
+        # a 0 per quei fill, ma restare a None qui è più esplicito che "0.0
+        # calcolato" per una posizione che non si è ancora chiusa.
+        total_realized_pnl = sum(float(t.get("realizedPnl", 0.0)) for t in trades) if reduce_only else None
         return total_fee, total_realized_pnl
 
     def close_position(self, symbol: str) -> ExecutionResult | None:

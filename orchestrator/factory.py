@@ -52,7 +52,18 @@ def save_paper_broker_state(broker: BrokerClient, user_settings: UserSettings) -
 
 def _default_risk_parameters(user_settings: UserSettings) -> RiskParameters:
     if user_settings.risk_parameters_json:
-        return RiskParameters.model_validate_json(user_settings.risk_parameters_json)
+        params = RiskParameters.model_validate_json(user_settings.risk_parameters_json)
+        # Una pausa è per definizione una decisione basata su prove osservate
+        # DURANTE una sessione: portarla avanti indefinitamente tra una
+        # sessione e l'altra (persistita su disco insieme a leva/esposizione,
+        # che invece hanno senso come impostazioni durature) bloccherebbe per
+        # sempre un simbolo sulla base di una singola review passata, senza
+        # che il ciclo lento sia mai spinto a riconsiderarla in assenza di
+        # nuove prove. Ogni nuova sessione riparte quindi senza simboli in
+        # pausa; la prima review del ciclo lento potrà rimetterli in pausa
+        # solo se le prove raccolte in QUESTA sessione lo giustificano.
+        params.paused_symbols = []
+        return params
 
     risk_limits = json.loads(user_settings.risk_limits_json)
     return RiskParameters(

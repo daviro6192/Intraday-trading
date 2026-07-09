@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from api.deps import get_db, get_session_factory_dep
-from api.schemas import SessionStatusResponse
+from api.schemas import SessionStatusResponse, StrategySymbolView
 from api.security import get_current_user
 from orchestrator.factory import build_broker_for_user, build_fee_schedule_from_config
 from orchestrator.session_manager import SessionAlreadyRunningError, session_manager
@@ -113,3 +113,25 @@ async def stop_session(
 @router.get("/status", response_model=SessionStatusResponse)
 def get_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> SessionStatusResponse:
     return _read_status(user, db)
+
+
+@router.get("/strategy-views", response_model=list[StrategySymbolView])
+def get_strategy_views(user: User = Depends(get_current_user)) -> list[StrategySymbolView]:
+    """Vista di strategia corrente per ciascun simbolo tracciato (Agente 2):
+    ha senso solo mentre una sessione è davvero in corso, il ciclo lento che
+    la produce gira solo lì — a sessione ferma non c'è nulla di "corrente"
+    da mostrare."""
+    live_session = session_manager.get(user.id)
+    if live_session is None:
+        return []
+
+    return [
+        StrategySymbolView(
+            symbol=view.symbol,
+            direction=view.direction.value,
+            conviction=view.conviction,
+            rationale=view.rationale,
+            updated_at=view.updated_at,
+        )
+        for view in live_session.state.strategy_views.values()
+    ]

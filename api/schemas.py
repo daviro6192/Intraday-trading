@@ -65,6 +65,14 @@ class SessionStatusResponse(BaseModel):
     funding_paid_today: float
 
 
+class StrategySymbolView(BaseModel):
+    symbol: str
+    direction: str  # long | short | flat
+    conviction: float
+    rationale: str
+    updated_at: datetime
+
+
 class TradeDaySummary(BaseModel):
     date: str  # YYYY-MM-DD (UTC)
     trades_count: int

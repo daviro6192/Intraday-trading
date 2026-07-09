@@ -41,6 +41,16 @@ export interface SessionStatusResponse {
   funding_paid_today: number
 }
 
+export type StrategyDirection = 'long' | 'short' | 'flat'
+
+export interface StrategySymbolView {
+  symbol: string
+  direction: StrategyDirection
+  conviction: number
+  rationale: string
+  updated_at: string
+}
+
 export interface TradeDaySummary {
   date: string
   trades_count: number

@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../api/client'
-import type { AccountState, SessionStatus, SessionStatusResponse, TradeDaySummary, TradeDetail } from '../api/types'
+import type {
+  AccountState,
+  SessionStatus,
+  SessionStatusResponse,
+  StrategyDirection,
+  StrategySymbolView,
+  TradeDaySummary,
+  TradeDetail,
+} from '../api/types'
 import { useAuth } from '../context/AuthContext'
 
 const POLL_INTERVAL_MS = 3000
@@ -11,6 +19,18 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   stopped: 'Ferma',
   interrupted: 'Interrotta',
   error: 'Errore',
+}
+
+const STRATEGY_LABEL: Record<StrategyDirection, string> = {
+  long: 'BUY',
+  short: 'SELL',
+  flat: 'HOLD',
+}
+
+const STRATEGY_ARROW: Record<StrategyDirection, string> = {
+  long: '↑',
+  short: '↓',
+  flat: '→',
 }
 
 function formatUsd(value: number | null | undefined): string {
@@ -38,6 +58,7 @@ export function SessionPage() {
   const [tradeDays, setTradeDays] = useState<TradeDaySummary[]>([])
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [tradeDetails, setTradeDetails] = useState<TradeDetail[] | null>(null)
+  const [strategyViews, setStrategyViews] = useState<StrategySymbolView[]>([])
   const pollRef = useRef<number | null>(null)
 
   const refreshAccount = useCallback(async () => {
@@ -56,6 +77,14 @@ export function SessionPage() {
     }
   }, [])
 
+  const refreshStrategyViews = useCallback(async () => {
+    try {
+      setStrategyViews(await api.get<StrategySymbolView[]>('/session/strategy-views'))
+    } catch {
+      setStrategyViews([])
+    }
+  }, [])
+
   const refreshTradeDays = useCallback(async () => {
     try {
       const days = await api.get<TradeDaySummary[]>('/trades/days')
@@ -71,7 +100,8 @@ export function SessionPage() {
     void refreshAccount()
     void refreshStatus()
     void refreshTradeDays()
-  }, [refreshAccount, refreshStatus, refreshTradeDays])
+    void refreshStrategyViews()
+  }, [refreshAccount, refreshStatus, refreshTradeDays, refreshStrategyViews])
 
   useEffect(() => {
     if (!selectedDay) {
@@ -90,7 +120,15 @@ export function SessionPage() {
     return () => {
       cancelled = true
     }
-  }, [selectedDay])
+  }, [
+    selectedDay,
+    // tradeDays (non solo selectedDay) è in dipendenza apposta: dopo "Fine"
+    // il giorno selezionato di solito non cambia (è già "oggi"), ma il suo
+    // conteggio trade sì — senza questo, la tabella di dettaglio resterebbe
+    // ferma all'ultima risposta presa a metà sessione invece di aggiornarsi
+    // con i trade chiusi allo stop.
+    tradeDays,
+  ])
 
   const isActive = status?.status === 'running' || status?.status === 'error'
   const currentStatus = status?.status ?? 'not_started'
@@ -105,6 +143,7 @@ export function SessionPage() {
       pollRef.current = window.setInterval(() => {
         void refreshStatus()
         void refreshAccount()
+        void refreshStrategyViews()
       }, POLL_INTERVAL_MS)
     }
     if (!isActive && pollRef.current !== null) {
@@ -117,7 +156,7 @@ export function SessionPage() {
         pollRef.current = null
       }
     }
-  }, [isActive, refreshStatus, refreshAccount])
+  }, [isActive, refreshStatus, refreshAccount, refreshStrategyViews])
 
   async function startSession() {
     setBusy(true)
@@ -126,6 +165,7 @@ export function SessionPage() {
       const started = await api.post<SessionStatusResponse>('/session/start')
       setStatus(started)
       await refreshAccount()
+      await refreshStrategyViews()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Errore nell'avvio della sessione")
     } finally {
@@ -141,6 +181,7 @@ export function SessionPage() {
       setStatus(stopped)
       await refreshAccount()
       await refreshTradeDays()
+      await refreshStrategyViews()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Errore nello stop della sessione')
     } finally {
@@ -159,6 +200,33 @@ export function SessionPage() {
       <header className="page-header">
         <h1>Ciao, {user?.username}</h1>
       </header>
+
+      {sessionIsLive && (
+        <section className="strategy-scorecards">
+          {strategyViews.length === 0 ? (
+            <p className="field-hint">In attesa della prima analisi di strategia…</p>
+          ) : (
+            strategyViews.map((view) => (
+              <div key={view.symbol} className={`card strategy-scorecard strategy-${view.direction}`}>
+                <div className="strategy-scorecard-header">
+                  <span className="strategy-symbol">{view.symbol}</span>
+                  <span className="strategy-arrow" aria-hidden="true">
+                    {STRATEGY_ARROW[view.direction]}
+                  </span>
+                </div>
+                <span className={`badge strategy-badge strategy-badge-${view.direction}`}>
+                  {STRATEGY_LABEL[view.direction]}
+                </span>
+                <div className="stat">
+                  <span className="stat-label">Conviction</span>
+                  <span className="stat-value mono-num">{(view.conviction * 100).toFixed(0)}%</span>
+                </div>
+                <p className="field-hint strategy-rationale">{view.rationale}</p>
+              </div>
+            ))
+          )}
+        </section>
+      )}
 
       <section className="card session-card">
         <div className="session-card-header">

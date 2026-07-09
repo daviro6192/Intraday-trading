@@ -173,6 +173,76 @@
   padding: 8px 10px;
 }
 
+/* --- Scorecard di strategia (una per simbolo tracciato) --- */
+
+.strategy-scorecards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.strategy-scorecard {
+  padding: 16px 18px;
+  gap: 10px;
+}
+
+.strategy-scorecard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.strategy-symbol {
+  font-weight: 600;
+  color: var(--text-h);
+  letter-spacing: 0.02em;
+}
+
+.strategy-arrow {
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.strategy-long .strategy-arrow {
+  color: var(--success);
+}
+
+.strategy-short .strategy-arrow {
+  color: var(--danger);
+}
+
+.strategy-flat .strategy-arrow {
+  color: var(--neutral);
+}
+
+.strategy-badge {
+  width: fit-content;
+}
+
+.strategy-badge-long {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.strategy-badge-short {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.strategy-badge-flat {
+  color: var(--neutral);
+  background: var(--neutral-bg);
+}
+
+.strategy-rationale {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* --- Sessione di trading --- */
 
 .session-card {

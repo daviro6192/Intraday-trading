@@ -168,6 +168,24 @@ def test_stop_closes_all_open_positions_immediately(client: TestClient):
     assert account_after_stop["open_positions"] == []
 
 
+def test_strategy_views_only_available_while_session_is_running(client: TestClient):
+    _register(client)
+
+    assert client.get("/api/session/strategy-views").json() == []
+
+    client.post("/api/session/start")
+    time.sleep(0.6)
+
+    views = client.get("/api/session/strategy-views").json()
+    assert len(views) >= 1
+    view = next(v for v in views if v["symbol"] == "BTCUSDT")
+    assert view["direction"] == "long"
+    assert view["conviction"] == pytest.approx(0.9)
+
+    client.post("/api/session/stop")
+    assert client.get("/api/session/strategy-views").json() == []
+
+
 def test_starting_a_second_session_while_one_is_running_is_rejected(client: TestClient):
     _register(client)
     client.post("/api/session/start")

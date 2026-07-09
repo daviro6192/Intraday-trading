@@ -63,7 +63,7 @@ def agent(monkeypatch) -> OrderAgent:
     return OrderAgent(broker=broker, fee_schedule=_fee_schedule(), default_leverage=2.0, max_risk_per_trade_pct=0.01)
 
 
-def test_opens_long_position_when_view_and_technical_signal_agree(agent, monkeypatch):
+def test_opens_long_position_on_strategy_view(agent, monkeypatch):
     monkeypatch.setattr("broker.paper_broker.get_mark_price", lambda symbol: 100.0)
 
     tick = agent.run_tick(
@@ -85,30 +85,32 @@ def test_opens_long_position_when_view_and_technical_signal_agree(agent, monkeyp
     assert tick.new_take_profit > 100.0
 
 
-def test_waits_when_technical_signal_disagrees_with_strategy_view(agent, monkeypatch):
+def test_opens_position_even_when_immediate_momentum_is_contrary(agent, monkeypatch):
+    """Il momentum di brevissimo termine (EMA su poche candele) resta spesso
+    contrario alla strategia per minuti di fila: richiedere che coincida
+    blocca quasi tutti gli ingressi. L'agente entra comunque sulla direzione
+    della strategia, usando le klines solo per calcolare stop/take-profit."""
     monkeypatch.setattr("broker.paper_broker.get_mark_price", lambda symbol: 100.0)
 
-    # La strategia dice LONG ma il momentum tecnico recente è ribassista: aspetta.
     tick = agent.run_tick(
         "BTCUSDT",
         _view(TradeDirection.LONG),
         position=None,
         mark_price=100.0,
-        klines=_falling_klines(),
+        klines=_falling_klines(),  # momentum immediato ribassista, strategia è LONG
         account=agent._broker.get_account_state(),
         risk_params=_risk_params(),
         current_stop_loss=None,
         current_take_profit=None,
     )
 
-    assert tick.execution_result is None
-    assert tick.intent is None
+    assert tick.execution_result is not None
+    assert tick.execution_result.status.value == "filled"
 
 
-def test_enters_anyway_when_not_enough_klines_for_technical_signal(agent, monkeypatch):
-    """L'assenza di un segnale tecnico (dati insufficienti) non è un segnale
-    CONTRARIO: l'agente entra comunque sulla sola direzione della strategia,
-    con stop/take-profit di fallback (percentuali fisse, niente ATR)."""
+def test_uses_fallback_stop_take_profit_when_not_enough_klines_for_atr(agent, monkeypatch):
+    """Con dati insufficienti per calcolare l'ATR, l'agente entra comunque
+    sulla direzione della strategia usando percentuali fisse di fallback."""
     monkeypatch.setattr("broker.paper_broker.get_mark_price", lambda symbol: 100.0)
 
     tick = agent.run_tick(
@@ -116,7 +118,7 @@ def test_enters_anyway_when_not_enough_klines_for_technical_signal(agent, monkey
         _view(TradeDirection.LONG),
         position=None,
         mark_price=100.0,
-        klines=_rising_klines(n=5),  # troppo poche candele per EMA/ATR
+        klines=_rising_klines(n=5),  # troppo poche candele per l'ATR
         account=agent._broker.get_account_state(),
         risk_params=_risk_params(),
         current_stop_loss=None,

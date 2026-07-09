@@ -1,9 +1,10 @@
 """Agente 3: entra/esce da posizioni long/short su Binance in modo meccanico
-e ad alta frequenza — NIENTE chiamate a Claude qui (la direzione arriva
-dall'Agente 2, la conferma di timing è puramente tecnica). Fonde quella che
-in precedenza era la generazione di proposte (Order Agent) e l'esecuzione
-sul broker (Execution Agent): decide ED esegue, passando prima dal gate
-deterministico dell'Agente 4 (agents.risk_agent.evaluate_trade_risk).
+e ad alta frequenza — NIENTE chiamate a Claude qui (direzione e conviction
+arrivano dall'Agente 2, le klines servono solo a dimensionare stop-loss e
+take-profit via ATR). Fonde quella che in precedenza era la generazione di
+proposte (Order Agent) e l'esecuzione sul broker (Execution Agent): decide
+ED esegue, passando prima dal gate deterministico dell'Agente 4
+(agents.risk_agent.evaluate_trade_risk).
 """
 
 from __future__ import annotations
@@ -33,8 +34,6 @@ from common.schemas import (
 
 logger = logging.getLogger(__name__)
 
-_EMA_FAST_PERIOD = 5
-_EMA_SLOW_PERIOD = 13
 _ATR_PERIOD = 14
 # Stop/take-profit volutamente stretti (non lontani in proporzione dal
 # rapporto reward/risk precedente, ~1.6x): un target più vicino si raggiunge
@@ -48,24 +47,6 @@ _TAKE_PROFIT_ATR_MULTIPLIER = 1.3
 # Fallback se non ci sono abbastanza klines per calcolare l'ATR (es. avvio a freddo).
 _FALLBACK_STOP_PCT = 0.006
 _FALLBACK_TAKE_PROFIT_PCT = 0.01
-
-
-def _timing_signal(klines: list[dict] | None) -> TradeDirection | None:
-    """Conferma tecnica del momento di ingresso: incrocio EMA veloce/lenta sui
-    prezzi di chiusura. Ritorna None se non ci sono abbastanza dati (l'Order
-    Agent aspetta il tick successivo invece di entrare alla cieca)."""
-    if not klines or len(klines) < _EMA_SLOW_PERIOD:
-        return None
-
-    closes = pd.Series([k["close"] for k in klines])
-    ema_fast = ta.trend.EMAIndicator(closes, window=_EMA_FAST_PERIOD).ema_indicator().iloc[-1]
-    ema_slow = ta.trend.EMAIndicator(closes, window=_EMA_SLOW_PERIOD).ema_indicator().iloc[-1]
-
-    if ema_fast > ema_slow:
-        return TradeDirection.LONG
-    if ema_fast < ema_slow:
-        return TradeDirection.SHORT
-    return None
 
 
 def _atr(klines: list[dict] | None) -> float | None:
@@ -144,21 +125,12 @@ class OrderAgent:
             # Posizione coerente ed entro i livelli: nessuna azione questo tick.
             return OrderAgentTick(new_stop_loss=current_stop_loss, new_take_profit=current_take_profit)
 
-        # 3. Nessuna posizione: entra subito, a meno che il momentum tecnico
-        # immediato non sia chiaramente CONTRARIO alla direzione della
-        # strategia (non serve che coincida: fondamentali lenti e momentum
-        # tecnico breve termine sono segnali indipendenti, richiedere che si
-        # allineino esattamente rende gli ingressi troppo rari).
-        timing_direction = _timing_signal(klines)
-        if timing_direction is not None and timing_direction is not view.direction:
-            logger.info(
-                "%s: strategia=%s ma momentum tecnico immediato=%s (contrario): aspetto",
-                symbol,
-                view.direction.value,
-                timing_direction.value,
-            )
-            return OrderAgentTick()
-
+        # 3. Nessuna posizione: entra subito sulla direzione della strategia.
+        # Un filtro tecnico (incrocio EMA) qui era stato provato per "confermare"
+        # il momento di ingresso, ma in pratica il momentum di brevissimo
+        # termine resta spesso contrario per minuti di fila e blocca quasi
+        # tutti gli ingressi — l'opposto dell'effetto voluto. Le klines
+        # restano usate solo per calcolare stop-loss/take-profit (ATR).
         return self._open(symbol, view.direction, mark_price, klines, account, risk_params)
 
     @staticmethod
@@ -209,7 +181,7 @@ class OrderAgent:
             reference_price=mark_price,
             stop_loss=stop_loss,
             take_profit=take_profit,
-            reason=f"Apertura {direction.value} su conferma tecnica EMA{_EMA_FAST_PERIOD}/{_EMA_SLOW_PERIOD}",
+            reason=f"Apertura {direction.value} su direzione di strategia (conviction sufficiente)",
         )
 
         return self._evaluate_and_execute(intent, None, account, risk_params, stop_loss, take_profit)

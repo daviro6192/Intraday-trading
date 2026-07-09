@@ -58,6 +58,37 @@ def test_round_quantity_unknown_symbol_rejected(broker, monkeypatch):
     assert broker._round_quantity("DOGEUSDT", 100.0) is None
 
 
+def test_round_quantity_rounds_up_when_closing(broker, monkeypatch):
+    """Una chiusura (reduce_only) arrotonda per ECCESSO: la posizione reale
+    raramente è un multiplo esatto dello step size (l'apertura arrotonda
+    per difetto), quindi chiudere arrotondando anch'essa per difetto
+    lascerebbe sempre una piccola quantità "polvere" aperta per sempre —
+    Binance limita comunque un reduce_only alla size reale, non la supera."""
+    monkeypatch.setattr(broker, "_public_request", lambda path, params: _EXCHANGE_INFO)
+    assert broker._round_quantity("BTCUSDT", 1.2341, round_up=True) == pytest.approx(1.235)
+
+
+def test_place_order_rounds_up_quantity_for_reduce_only_close(broker, monkeypatch):
+    monkeypatch.setattr(broker, "_ensure_symbol_configured", lambda symbol, leverage: None)
+
+    captured = {}
+
+    def fake_round_quantity(symbol, quantity, round_up=False):
+        captured["round_up"] = round_up
+        return quantity
+
+    monkeypatch.setattr(broker, "_round_quantity", fake_round_quantity)
+    monkeypatch.setattr(
+        broker,
+        "_signed_request",
+        lambda method, path, params: {"orderId": 1, "status": "FILLED", "executedQty": "0.007", "avgPrice": "60000.0"},
+    )
+
+    broker.place_order("BTCUSDT", OrderSide.SELL, 0.0081, 3.0, reference_price=60000.0, reduce_only=True)
+
+    assert captured["round_up"] is True
+
+
 def test_ensure_symbol_configured_treats_already_set_margin_type_as_success(broker, monkeypatch):
     calls = []
 
@@ -90,7 +121,7 @@ def test_ensure_symbol_configured_rejects_on_other_margin_error(broker, monkeypa
 
 def test_place_order_successful_fill(broker, monkeypatch):
     monkeypatch.setattr(broker, "_ensure_symbol_configured", lambda symbol, leverage: None)
-    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty: qty)
+    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty, round_up=False: qty)
 
     def fake_signed_request(method, path, params):
         if path == "/fapi/v1/order":
@@ -111,7 +142,7 @@ def test_place_order_successful_fill(broker, monkeypatch):
 
 def test_place_order_known_rejection_code(broker, monkeypatch):
     monkeypatch.setattr(broker, "_ensure_symbol_configured", lambda symbol, leverage: None)
-    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty: qty)
+    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty, round_up=False: qty)
     monkeypatch.setattr(
         broker, "_signed_request", lambda method, path, params: {"code": -2019, "msg": "Margin is insufficient."}
     )
@@ -124,7 +155,7 @@ def test_place_order_known_rejection_code(broker, monkeypatch):
 
 def test_place_order_unknown_error_code_is_error_not_rejected(broker, monkeypatch):
     monkeypatch.setattr(broker, "_ensure_symbol_configured", lambda symbol, leverage: None)
-    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty: qty)
+    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty, round_up=False: qty)
     monkeypatch.setattr(
         broker, "_signed_request", lambda method, path, params: {"code": -1021, "msg": "Timestamp out of window."}
     )
@@ -136,7 +167,7 @@ def test_place_order_unknown_error_code_is_error_not_rejected(broker, monkeypatc
 
 def test_place_order_network_failure_is_error(broker, monkeypatch):
     monkeypatch.setattr(broker, "_ensure_symbol_configured", lambda symbol, leverage: None)
-    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty: qty)
+    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty, round_up=False: qty)
     monkeypatch.setattr(broker, "_signed_request", lambda method, path, params: None)
 
     result = broker.place_order("BTCUSDT", OrderSide.BUY, 0.01, 3.0, reference_price=60000.0)
@@ -163,7 +194,7 @@ def test_closing_order_fetches_realized_pnl_from_user_trades(broker, monkeypatch
     riportare il P&L realizzato REALE del trade, sommato sui fill multipli
     restituiti da userTrades, non lasciato a None."""
     monkeypatch.setattr(broker, "_ensure_symbol_configured", lambda symbol, leverage: None)
-    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty: qty)
+    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty, round_up=False: qty)
 
     def fake_signed_request(method, path, params):
         if path == "/fapi/v1/order":
@@ -186,7 +217,7 @@ def test_closing_order_fetches_realized_pnl_from_user_trades(broker, monkeypatch
 
 def test_closing_order_falls_back_to_estimate_when_user_trades_unavailable(broker, monkeypatch):
     monkeypatch.setattr(broker, "_ensure_symbol_configured", lambda symbol, leverage: None)
-    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty: qty)
+    monkeypatch.setattr(broker, "_round_quantity", lambda symbol, qty, round_up=False: qty)
 
     def fake_signed_request(method, path, params):
         if path == "/fapi/v1/order":

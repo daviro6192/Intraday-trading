@@ -256,7 +256,16 @@ class BinanceFuturesTestnetBroker:
                     }
         return self._exchange_info.get(symbol)
 
-    def _round_quantity(self, symbol: str, quantity: float) -> float | None:
+    def _round_quantity(self, symbol: str, quantity: float, round_up: bool = False) -> float | None:
+        """round_up=True per le chiusure (reduce_only): una posizione reale
+        raramente è un multiplo esatto dello step size (l'apertura stessa
+        arrotonda per difetto), quindi chiudere arrotondando anch'essa per
+        difetto lascerebbe sempre una piccola quantità "polvere" ancora
+        aperta — e ai tentativi successivi quella polvere può finire sotto
+        il minimo e restare bloccata per sempre. Arrotondare per eccesso è
+        sicuro qui: un ordine reduce_only che richiede più della posizione
+        aperta viene comunque limitato da Binance alla size reale, non la
+        supera mai."""
         filters = self._get_symbol_filters(symbol)
         if filters is None:
             # Simbolo non trovato in exchangeInfo (o exchangeInfo
@@ -265,7 +274,11 @@ class BinanceFuturesTestnetBroker:
             return None
 
         step_size = filters["step_size"]
-        rounded = math.floor(quantity / step_size) * step_size if step_size > 0 else quantity
+        if step_size > 0:
+            steps = math.ceil(quantity / step_size) if round_up else math.floor(quantity / step_size)
+            rounded = steps * step_size
+        else:
+            rounded = quantity
         rounded = round(rounded, filters["quantity_precision"])
         if rounded <= 0 or rounded < filters["min_qty"]:
             return None
@@ -298,7 +311,7 @@ class BinanceFuturesTestnetBroker:
         if setup_error is not None:
             return self._reject(symbol, side, setup_error)
 
-        rounded_quantity = self._round_quantity(symbol, quantity)
+        rounded_quantity = self._round_quantity(symbol, quantity, round_up=reduce_only)
         if rounded_quantity is None:
             return self._reject(symbol, side, "quantità troppo piccola dopo arrotondamento allo step size di Binance")
 

@@ -9,6 +9,7 @@ porta, per un uso locale con un solo comando.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -31,6 +32,22 @@ from orchestrator.session_manager import session_manager
 # comparirebbero comunque (handler di fallback di Python), dando l'illusione
 # che "non succeda nulla" anche quando il sistema sta lavorando normalmente.
 configure_logging(settings.log_level)
+
+
+class _SuppressPollingAccessLogs(logging.Filter):
+    """Il frontend fa polling di /api/session/status e /api/account/state
+    ogni pochi secondi mentre una sessione è attiva: senza questo filtro,
+    l'access log di uvicorn seppellisce in fretta i log applicativi
+    (es. l'esito del ciclo lento), che interessano molto di più."""
+
+    _quiet_paths = ("/api/session/status", "/api/account/state")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return not any(path in message for path in self._quiet_paths)
+
+
+logging.getLogger("uvicorn.access").addFilter(_SuppressPollingAccessLogs())
 
 
 @asynccontextmanager

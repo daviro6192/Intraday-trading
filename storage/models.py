@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from common.schemas import ExecutionResult, FundamentalAnalysis, OrderIntent, RiskDecision, RiskParameters, StrategyView
 
@@ -29,13 +30,33 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class UTCDateTime(TypeDecorator):
+    """DateTime che garantisce tzinfo=UTC in lettura.
+
+    SQLite non ha un vero tipo timestamp: anche con `DateTime(timezone=True)`,
+    rilegge sempre un datetime "naive" (senza tzinfo), pur avendo salvato
+    correttamente l'istante UTC. Senza questo, il frontend riceve un ISO
+    string senza indicazione di fuso (es. "2026-07-09T12:34:49") e
+    `new Date(...)` in JavaScript lo interpreta come ora LOCALE invece che
+    UTC, mostrando un orario sbagliato di qualche ora invece di convertirlo
+    correttamente nel fuso del browser."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_result_value(self, value: datetime | None, dialect: object) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
+
+
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(Text, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
 
     settings: Mapped["UserSettings"] = relationship(back_populates="user", uselist=False)
 
@@ -93,8 +114,8 @@ class TradingSession(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
+    stopped_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     # running | stopped | interrupted (persa per riavvio del processo) | error
     status: Mapped[str] = mapped_column(Text, default="running")
     starting_equity: Mapped[float] = mapped_column(default=0.0)
@@ -121,7 +142,7 @@ class PipelineRun(Base):
     # Nullable: utile per test/uso senza una sessione attiva collegata.
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     session_id: Mapped[int | None] = mapped_column(ForeignKey("trading_sessions.id"), nullable=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
 
     session: Mapped[TradingSession | None] = relationship(back_populates="pipeline_runs")
     fundamental_analyses: Mapped[list["FundamentalAnalysisRecord"]] = relationship(back_populates="run")
@@ -133,7 +154,7 @@ class FundamentalAnalysisRecord(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_runs.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     symbol: Mapped[str] = mapped_column(Text)
     payload: Mapped[str] = mapped_column(Text)
 
@@ -145,7 +166,7 @@ class StrategyViewRecord(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_runs.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     symbol: Mapped[str] = mapped_column(Text)
     payload: Mapped[str] = mapped_column(Text)
 
@@ -161,7 +182,7 @@ class OrderIntentRecord(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("trading_sessions.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     symbol: Mapped[str] = mapped_column(Text)
     payload: Mapped[str] = mapped_column(Text)
 
@@ -173,7 +194,7 @@ class RiskDecisionRecord(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("trading_sessions.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     symbol: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text)
     payload: Mapped[str] = mapped_column(Text)
@@ -186,7 +207,7 @@ class ExecutionResultRecord(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("trading_sessions.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     symbol: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text)
     payload: Mapped[str] = mapped_column(Text)
@@ -202,7 +223,7 @@ class RiskParametersRecord(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[int | None] = mapped_column(ForeignKey("trading_sessions.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_utcnow)
     payload: Mapped[str] = mapped_column(Text)
 
     session: Mapped[TradingSession | None] = relationship(back_populates="risk_parameters_history")

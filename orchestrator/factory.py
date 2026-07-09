@@ -21,6 +21,16 @@ from config.settings import trading_config
 from storage.models import User, UserSettings
 
 
+def build_fee_schedule_from_config() -> FeeSchedule:
+    execution_config = trading_config["execution"]
+    return FeeSchedule(
+        maker_fee_pct=execution_config["maker_fee_pct"],
+        taker_fee_pct=execution_config["taker_fee_pct"],
+        funding_interval_hours=execution_config["funding_interval_hours"],
+        default_funding_rate_fallback_pct=execution_config["default_funding_rate_fallback_pct"],
+    )
+
+
 def build_broker_for_user(user_settings: UserSettings, fee_schedule: FeeSchedule) -> BrokerClient:
     execution_config = trading_config["execution"]
     broker = PaperBroker(
@@ -80,12 +90,7 @@ def build_live_components_for_user(user: User, session_factory: sessionmaker[Ses
     claude_client = ClaudeClient(api_key=user_settings.anthropic_api_key, model=user_settings.claude_model)
 
     execution_config = trading_config["execution"]
-    fee_schedule = FeeSchedule(
-        maker_fee_pct=execution_config["maker_fee_pct"],
-        taker_fee_pct=execution_config["taker_fee_pct"],
-        funding_interval_hours=execution_config["funding_interval_hours"],
-        default_funding_rate_fallback_pct=execution_config["default_funding_rate_fallback_pct"],
-    )
+    fee_schedule = build_fee_schedule_from_config()
 
     broker = build_broker_for_user(user_settings, fee_schedule)
     broker.connect()

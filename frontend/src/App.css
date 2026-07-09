@@ -2,20 +2,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--navbar-border);
-  background: var(--navbar-bg);
-  box-shadow: 0 1px 0 rgba(52, 211, 153, 0.25);
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
 }
 
 .navbar-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--navbar-text);
+  color: var(--text-h);
   text-decoration: none;
+  font-size: 15px;
 }
 
 .navbar-brand::before {
@@ -23,8 +23,8 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--navbar-accent);
-  box-shadow: 0 0 6px var(--navbar-accent);
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
 }
 
 .navbar-links {
@@ -33,31 +33,15 @@
   gap: 20px;
 }
 
-.navbar-links a {
-  color: var(--navbar-text-dim);
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.navbar-links a:hover {
-  color: var(--navbar-text);
-}
-
 .navbar-links button.link-button {
-  color: var(--navbar-text-dim);
-  font-size: 14px;
-  text-decoration: none;
-}
-
-.navbar-links button.link-button:hover {
-  color: var(--navbar-text);
+  font-size: 13px;
 }
 
 .page {
   max-width: 1120px;
   width: 100%;
   margin: 0 auto;
-  padding: 24px;
+  padding: 32px 24px 48px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -75,7 +59,7 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  color: var(--text);
+  color: var(--text-dim);
 }
 
 .page-header {
@@ -88,10 +72,10 @@
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 20px;
+  padding: 22px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .card label {
@@ -109,47 +93,61 @@
 
 .stat-row {
   display: flex;
-  gap: 32px;
+  gap: 36px;
   flex-wrap: wrap;
+}
+
+.stat-row-secondary {
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
 }
 
 .stat {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .stat-label {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text);
+  color: var(--text-dim);
 }
 
 .stat-value {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--text-h);
 }
 
 .stat-value.hero {
-  font-size: 32px;
+  font-size: 30px;
 }
 
-.positions-table,
-.runs-table {
+.positions-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
 }
 
-.positions-table th,
+.positions-table th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
 .positions-table td {
   text-align: left;
-  padding: 8px 6px;
+  padding: 10px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -157,27 +155,9 @@
   text-align: right;
 }
 
-.runs-table th,
-.runs-table td {
-  text-align: left;
-  padding: 8px 6px;
-  border-bottom: 1px solid var(--border);
-}
-
-.json-block {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px;
-  font-size: 12px;
-  overflow-x: auto;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
 .field-hint {
   font-size: 13px;
-  color: var(--text);
+  color: var(--text-dim);
 }
 
 .form-message {
@@ -193,24 +173,141 @@
   padding: 8px 10px;
 }
 
+/* --- Sessione di trading --- */
+
+.session-card {
+  border-color: var(--border-strong);
+}
+
+.session-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.session-card-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.session-card-title h2 {
+  margin: 0;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 4px 10px 4px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.status-not_started {
+  color: var(--text-dim);
+  background: var(--neutral-bg);
+}
+.status-not_started .status-dot {
+  background: var(--neutral);
+}
+
+.status-running {
+  color: var(--success);
+  background: var(--success-bg);
+}
+.status-running .status-dot {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.status-stopped {
+  color: var(--text-dim);
+  background: var(--neutral-bg);
+}
+.status-stopped .status-dot {
+  background: var(--neutral);
+}
+
+.status-interrupted {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+.status-interrupted .status-dot {
+  background: var(--warning);
+}
+
+.status-error {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+.status-error .status-dot {
+  background: var(--danger);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.button-start {
+  background: var(--accent);
+  color: #04120a;
+}
+
+.button-stop {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.button-stop:hover {
+  background: var(--danger-bg);
+  opacity: 1;
+}
+
+/* --- Login / Registrazione --- */
+
 .auth-page {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  background: radial-gradient(circle at 50% 0%, #0a0f0c 0%, #000000 60%);
 }
 
 .auth-card {
   width: 100%;
   max-width: 380px;
   background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 36px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
+}
+
+.auth-card h1 {
+  margin-bottom: 4px;
 }
 
 .auth-card label {
@@ -224,5 +321,5 @@
 .auth-switch {
   font-size: 14px;
   text-align: center;
-  color: var(--text);
+  color: var(--text-dim);
 }

@@ -1,54 +1,44 @@
 :root {
-  --text: #4b5563;
-  --text-h: #08060d;
-  --bg: #f7f7f9;
-  --card-bg: #fff;
-  --border: #e5e4e7;
-  --accent: #7c3aed;
-  --accent-bg: rgba(124, 58, 237, 0.1);
-  --accent-border: rgba(124, 58, 237, 0.5);
-  --danger: #dc2626;
-  --danger-bg: rgba(220, 38, 38, 0.08);
-  --success: #16a34a;
-  --success-bg: rgba(22, 163, 74, 0.08);
+  /* Tema fisso, scuro: come una vera piattaforma di trading professionale
+     (terminal-style), non segue il tema chiaro/scuro del sistema. */
+  --bg: #000000;
+  --bg-elevated: #060607;
+  --card-bg: #0c0d10;
+  --card-bg-hover: #111318;
+  --border: #1e2027;
+  --border-strong: #2a2d36;
 
-  /* Barra di navigazione: sempre scura, come il "chrome" persistente di una
-     vera piattaforma di trading, indipendentemente dal tema chiaro/scuro
-     della pagina. */
-  --navbar-bg: #0b0e14;
-  --navbar-border: #1f2430;
-  --navbar-text: #e5e7eb;
-  --navbar-text-dim: #8b93a7;
-  --navbar-accent: #34d399;
+  --text: #c7cbd4;
+  --text-h: #f5f6f8;
+  --text-dim: #6b7280;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, 'SF Mono', Consolas, monospace;
+  --accent: #22c55e;
+  --accent-strong: #16a34a;
+  --accent-bg: rgba(34, 197, 94, 0.12);
 
-  font: 16px/145% var(--sans);
-  color-scheme: light dark;
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.12);
+
+  --success: #22c55e;
+  --success-bg: rgba(34, 197, 94, 0.12);
+
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.12);
+
+  --neutral: #6b7280;
+  --neutral-bg: rgba(107, 114, 128, 0.12);
+
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+
+  font: 15px/1.5 var(--sans);
+  color-scheme: dark;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --card-bg: #1c1d24;
-    --border: #2e303a;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --danger: #f87171;
-    --danger-bg: rgba(248, 113, 113, 0.12);
-    --success: #4ade80;
-    --success-bg: rgba(74, 222, 128, 0.1);
-  }
 }
 
 .mono-num {
@@ -106,13 +96,17 @@ h2 {
 }
 
 h1 {
-  font-size: 28px;
+  font-size: 26px;
   margin: 0 0 16px;
+  letter-spacing: -0.01em;
 }
 
 h2 {
-  font-size: 18px;
-  margin: 0 0 12px;
+  font-size: 15px;
+  margin: 0 0 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
 }
 
 p {
@@ -121,29 +115,41 @@ p {
 
 button {
   font: inherit;
+  font-weight: 600;
   cursor: pointer;
   border-radius: 6px;
-  border: none;
-  padding: 8px 16px;
+  border: 1px solid transparent;
+  padding: 9px 18px;
   background: var(--accent);
-  color: #fff;
-  transition: opacity 0.15s;
+  color: #04120a;
+  transition:
+    opacity 0.15s,
+    transform 0.05s;
 }
 
 button:hover {
   opacity: 0.9;
 }
 
+button:active {
+  transform: translateY(1px);
+}
+
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 button.link-button {
   background: none;
-  color: var(--accent);
+  color: var(--text-dim);
   padding: 0;
-  text-decoration: underline;
+  font-weight: 500;
+}
+
+button.link-button:hover {
+  color: var(--text-h);
+  opacity: 1;
 }
 
 input,
@@ -151,11 +157,18 @@ select,
 textarea {
   font: inherit;
   color: var(--text-h);
-  background: var(--card-bg);
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 9px 11px;
   width: 100%;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 textarea {

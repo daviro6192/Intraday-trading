@@ -10,23 +10,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from api.deps import get_db, get_session_factory_dep
 from api.schemas import SessionStatusResponse
 from api.security import get_current_user
-from common.schemas import FeeSchedule
-from config.settings import trading_config
-from orchestrator.factory import build_broker_for_user
+from orchestrator.factory import build_broker_for_user, build_fee_schedule_from_config
 from orchestrator.session_manager import SessionAlreadyRunningError, session_manager
 from storage.models import ExecutionResultRecord, TradingSession, User
 
 router = APIRouter(prefix="/api/session", tags=["session"])
-
-
-def _fee_schedule() -> FeeSchedule:
-    execution_config = trading_config["execution"]
-    return FeeSchedule(
-        maker_fee_pct=execution_config["maker_fee_pct"],
-        taker_fee_pct=execution_config["taker_fee_pct"],
-        funding_interval_hours=execution_config["funding_interval_hours"],
-        default_funding_rate_fallback_pct=execution_config["default_funding_rate_fallback_pct"],
-    )
 
 
 def _read_status(user: User, db: Session) -> SessionStatusResponse:
@@ -68,7 +56,7 @@ def _read_status(user: User, db: Session) -> SessionStatusResponse:
             )
             or 0
         )
-        broker = build_broker_for_user(user.settings, _fee_schedule())
+        broker = build_broker_for_user(user.settings, build_fee_schedule_from_config())
         account = broker.get_account_state()
         status_value = latest_db_session.status
 

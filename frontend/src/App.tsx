@@ -3,10 +3,9 @@ import './App.css'
 import { NavBar } from './components/NavBar'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import { DashboardPage } from './pages/Dashboard'
 import { LoginPage } from './pages/Login'
 import { RegisterPage } from './pages/Register'
-import { SettingsPage } from './pages/Settings'
+import { SessionPage } from './pages/Session'
 
 function AppRoutes() {
   const { user } = useAuth()
@@ -18,8 +17,7 @@ function AppRoutes() {
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
         <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />
         <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/" element={<SessionPage />} />
         </Route>
       </Routes>
     </>

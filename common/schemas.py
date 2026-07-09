@@ -79,10 +79,14 @@ class SymbolCandidate(BaseModel):
 
 
 class SymbolSelection(BaseModel):
-    """Wrapper per l'output dello screener: esattamente 3 ticker perpetual
-    (lo stesso valore `binance_perp` ricevuto in input tra i candidati)."""
+    """Wrapper per l'output dello screener: i ticker perpetual scelti (lo
+    stesso valore `binance_perp` ricevuto in input tra i candidati). Il
+    numero esatto richiesto è configurabile (trading.yaml,
+    symbols_per_session): la validazione del conteggio e dell'appartenenza
+    ai candidati avviene lato Python in select_symbols_for_session, non qui
+    (uno schema statico non può esprimere un conteggio che varia a runtime)."""
 
-    selected_binance_perps: list[str] = Field(min_length=3, max_length=3)
+    selected_binance_perps: list[str] = Field(min_length=1)
     rationale: str
 
 

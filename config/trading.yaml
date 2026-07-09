@@ -3,10 +3,21 @@
 # simulata (futures USDT-M perpetual su Binance) e limiti di rischio.
 # Tutti i valori sono modificabili senza toccare il codice.
 #
-# Perimetro: 3 simboli, scelti dinamicamente a ogni avvio di sessione dallo
+# Perimetro: simboli scelti dinamicamente a ogni avvio di sessione dallo
 # screener (agents/symbol_screener_agent.py) tra i candidati elencati in
 # symbol_universe, in base a volatilità/liquidità delle ultime 24h — non per
 # forza Bitcoin/Solana/altri simboli "storici".
+
+# Quanti simboli sceglie lo screener per sessione: più alto aumenta la
+# probabilità che, oltre alla volatilità (criterio dello screener), alcuni
+# abbiano anche fondamentali abbastanza chiari da generare una direzione
+# tradabile invece di "flat" (la Strategy Agent decide long/short/flat solo
+# sui fondamentali, non sulla volatilità a breve termine — i due criteri
+# non sono la stessa cosa, un simbolo può essere molto volatile e avere
+# comunque segnali fondamentali contrastanti). Costo: più simboli da
+# seguire in parallelo, più token per ciclo lento (stesso numero di
+# chiamate Claude, batch più grandi).
+symbols_per_session: 6
 
 symbol_universe:
   - symbol: BTC
@@ -93,10 +104,13 @@ cycles:
 execution:
   starting_cash_usdt: 100000.0
   default_leverage: 3
-  # Commissioni stile Binance futures USDT-M (non ottenibili da un endpoint
-  # pubblico, sono account-specific: restano assunzioni qui).
-  maker_fee_pct: 0.0002
-  taker_fee_pct: 0.0004
+  # Commissioni (non ottenibili da un endpoint pubblico, sono
+  # account-specific: restano assunzioni qui, aggiornabili qui senza
+  # toccare il codice). 0.1% è lo standard non-VIP di Binance SPOT; sui
+  # futures USDT-M lo standard non-VIP è più basso (maker 0.02%, taker
+  # 0.04%) — usato qui comunque 0.1% per entrambe su richiesta esplicita.
+  maker_fee_pct: 0.001
+  taker_fee_pct: 0.001
   funding_interval_hours: 8
   # Usato solo se Binance non è raggiungibile al momento dell'accrual.
   default_funding_rate_fallback_pct: 0.0001

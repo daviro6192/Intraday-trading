@@ -82,7 +82,8 @@ def _default_risk_parameters(user_settings: UserSettings) -> RiskParameters:
 
 
 def select_symbols_for_session(claude_client: ClaudeClient) -> tuple[dict[str, dict[str, str]], str]:
-    """Sceglie i 3 simboli su cui tradare per la sessione in arrivo,
+    """Sceglie i simboli su cui tradare per la sessione in arrivo (il
+    conteggio è configurabile, trading.yaml: symbols_per_session),
     interrogando lo screener su un universo di candidati più ampio di un
     set fisso — in base a volatilità/liquidità delle ultime 24h, non per
     forza Bitcoin/Solana/altri simboli "storici". Non deve mai impedire
@@ -90,6 +91,7 @@ def select_symbols_for_session(claude_client: ClaudeClient) -> tuple[dict[str, d
     raggiungibili, risposta malformata) ripiega sul set fisso di fallback
     in trading.yaml."""
     universe = trading_config["symbol_universe"]
+    count = trading_config["symbols_per_session"]
     fallback_symbols: dict[str, dict[str, str]] = trading_config["symbols_fallback"]
     fallback_rationale = "Screener non disponibile in questo momento: uso il set fisso di fallback."
 
@@ -105,17 +107,18 @@ def select_symbols_for_session(claude_client: ClaudeClient) -> tuple[dict[str, d
         for entry in universe
         if entry["binance_perp"] in stats
     ]
-    if len(candidates) < 3:
+    if len(candidates) < count:
         logger.warning(
-            "Screener: dati 24h insufficienti (%d/%d candidati disponibili), uso il set fisso di fallback",
+            "Screener: dati 24h insufficienti (%d/%d candidati disponibili, ne servono %d), uso il set fisso di fallback",
             len(candidates),
             len(universe),
+            count,
         )
         return fallback_symbols, fallback_rationale
 
     by_binance_perp = {c.binance_perp: c for c in candidates}
     try:
-        selection = SymbolScreenerAgent(claude_client).run(candidates)
+        selection = SymbolScreenerAgent(claude_client).run(candidates, count)
     except Exception:
         logger.exception("Screener: chiamata a Claude fallita, uso il set fisso di fallback")
         return fallback_symbols, fallback_rationale
@@ -125,10 +128,11 @@ def select_symbols_for_session(claude_client: ClaudeClient) -> tuple[dict[str, d
     # ci si affida ciecamente a un output strutturato pur validato.
     selected_perps = [p for p in dict.fromkeys(selection.selected_binance_perps) if p in by_binance_perp]
 
-    if len(selected_perps) < 3:
+    if len(selected_perps) < count:
         logger.warning(
-            "Screener: Claude ha proposto solo %d simboli validi su 3 richiesti, completo con i più volatili rimasti",
+            "Screener: Claude ha proposto solo %d simboli validi su %d richiesti, completo con i più volatili rimasti",
             len(selected_perps),
+            count,
         )
         remaining = sorted(
             (c for c in candidates if c.binance_perp not in selected_perps),
@@ -136,11 +140,11 @@ def select_symbols_for_session(claude_client: ClaudeClient) -> tuple[dict[str, d
             reverse=True,
         )
         for candidate in remaining:
-            if len(selected_perps) >= 3:
+            if len(selected_perps) >= count:
                 break
             selected_perps.append(candidate.binance_perp)
 
-    selected_perps = selected_perps[:3]
+    selected_perps = selected_perps[:count]
     symbols = {
         perp: {
             "symbol": by_binance_perp[perp].symbol,

@@ -27,13 +27,14 @@ def test_screener_agent_returns_claudes_selection():
     )
     candidates = [_candidate("BTC", "BTCUSDT", 0.5), _candidate("DOGE", "DOGEUSDT", 12.0)]
 
-    selection = SymbolScreenerAgent(client).run(candidates)
+    selection = SymbolScreenerAgent(client).run(candidates, 3)
 
     assert selection.selected_binance_perps == ["DOGEUSDT", "WIFUSDT", "TIAUSDT"]
     assert selection.rationale == "volatili oggi"
 
 
 def test_select_symbols_for_session_uses_screener_choice(monkeypatch):
+    monkeypatch.setitem(trading_config, "symbols_per_session", 3)
     monkeypatch.setitem(
         trading_config,
         "symbol_universe",
@@ -70,6 +71,7 @@ def test_select_symbols_for_session_falls_back_when_binance_unreachable(monkeypa
 
 
 def test_select_symbols_for_session_backfills_invalid_claude_picks(monkeypatch):
+    monkeypatch.setitem(trading_config, "symbols_per_session", 3)
     monkeypatch.setitem(
         trading_config,
         "symbol_universe",

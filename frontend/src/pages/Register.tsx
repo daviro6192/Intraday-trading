@@ -8,6 +8,7 @@ export function RegisterPage() {
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [anthropicApiKey, setAnthropicApiKey] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -16,7 +17,7 @@ export function RegisterPage() {
     setError(null)
     setSubmitting(true)
     try {
-      await register(username, password)
+      await register(username, password, anthropicApiKey)
       navigate('/')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Errore di registrazione')
@@ -50,6 +51,20 @@ export function RegisterPage() {
             required
           />
         </label>
+        <label>
+          Anthropic API key
+          <input
+            type="password"
+            value={anthropicApiKey}
+            onChange={(e) => setAnthropicApiKey(e.target.value)}
+            placeholder="sk-ant-..."
+            required
+          />
+        </label>
+        <p className="field-hint">
+          Da console.anthropic.com. Resta salvata solo nel database locale, mai nel codice — qui non finisce in
+          nessun comando di terminale o cronologia della shell.
+        </p>
         {error && <p className="form-error">{error}</p>}
         <button type="submit" disabled={submitting}>
           {submitting ? 'Creazione…' : 'Registrati'}

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 class RegisterRequest(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     password: str = Field(min_length=8, max_length=200)
+    anthropic_api_key: str | None = None
 
 
 class LoginRequest(BaseModel):

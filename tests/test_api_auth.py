@@ -83,3 +83,20 @@ def test_new_user_gets_settings_seeded_from_trading_yaml(client: TestClient):
 
     risk_limits_response = client.get("/api/risk-limits")
     assert "max_risk_per_trade_pct" in risk_limits_response.json()
+
+
+def test_register_with_anthropic_api_key_stores_it_immediately(client: TestClient):
+    client.post(
+        "/api/auth/register",
+        json={"username": "trader1", "password": "password123", "anthropic_api_key": "sk-ant-test-key"},
+    )
+
+    settings_response = client.get("/api/settings")
+    assert settings_response.json()["has_api_key"] is True
+
+
+def test_register_without_anthropic_api_key_leaves_it_unset(client: TestClient):
+    client.post("/api/auth/register", json={"username": "trader1", "password": "password123"})
+
+    settings_response = client.get("/api/settings")
+    assert settings_response.json()["has_api_key"] is False

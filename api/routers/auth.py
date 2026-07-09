@@ -29,6 +29,7 @@ def register(body: RegisterRequest, request: Request, db: Session = Depends(get_
 
     user.settings = UserSettings(
         user_id=user.id,
+        anthropic_api_key=(body.anthropic_api_key or "").strip(),
         symbols_json=json.dumps(trading_config["symbols"]),
         risk_limits_json=json.dumps(trading_config["risk_limits"]),
     )

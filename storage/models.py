@@ -98,6 +98,11 @@ class TradingSession(Base):
     # running | stopped | interrupted (persa per riavvio del processo) | error
     status: Mapped[str] = mapped_column(Text, default="running")
     starting_equity: Mapped[float] = mapped_column(default=0.0)
+    # fees_paid_today/funding_paid_today sul broker sono cumulativi da sempre
+    # (mai azzerati automaticamente): per mostrare "fee/funding pagati IN
+    # QUESTA sessione" serve sottrarre il valore che avevano già all'avvio.
+    starting_fees_paid: Mapped[float] = mapped_column(default=0.0)
+    starting_funding_paid: Mapped[float] = mapped_column(default=0.0)
 
     pipeline_runs: Mapped[list["PipelineRun"]] = relationship(back_populates="session")
     order_intents: Mapped[list["OrderIntentRecord"]] = relationship(back_populates="session")

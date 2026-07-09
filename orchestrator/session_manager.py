@@ -112,10 +112,16 @@ class SessionManager:
             raise SessionAlreadyRunningError("È già in corso una sessione di trading per questo utente.")
 
         components = build_live_components_for_user(user, session_factory)
-        starting_equity = components.broker.get_account_state().equity
+        starting_account = components.broker.get_account_state()
 
         with session_factory() as db:
-            db_session = TradingSession(user_id=user.id, status="running", starting_equity=starting_equity)
+            db_session = TradingSession(
+                user_id=user.id,
+                status="running",
+                starting_equity=starting_account.equity,
+                starting_fees_paid=starting_account.fees_paid_today,
+                starting_funding_paid=starting_account.funding_paid_today,
+            )
             db.add(db_session)
             db.commit()
             db.refresh(db_session)
@@ -128,7 +134,11 @@ class SessionManager:
         live_session.start()
 
         return TradingSession(
-            id=db_session_id, user_id=user.id, started_at=started_at, status="running", starting_equity=starting_equity
+            id=db_session_id,
+            user_id=user.id,
+            started_at=started_at,
+            status="running",
+            starting_equity=starting_account.equity,
         )
 
     async def stop_session(self, user_id: int, session_factory: sessionmaker[Session]) -> None:

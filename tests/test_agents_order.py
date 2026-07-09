@@ -105,7 +105,10 @@ def test_waits_when_technical_signal_disagrees_with_strategy_view(agent, monkeyp
     assert tick.intent is None
 
 
-def test_waits_when_not_enough_klines_for_technical_signal(agent, monkeypatch):
+def test_enters_anyway_when_not_enough_klines_for_technical_signal(agent, monkeypatch):
+    """L'assenza di un segnale tecnico (dati insufficienti) non è un segnale
+    CONTRARIO: l'agente entra comunque sulla sola direzione della strategia,
+    con stop/take-profit di fallback (percentuali fisse, niente ATR)."""
     monkeypatch.setattr("broker.paper_broker.get_mark_price", lambda symbol: 100.0)
 
     tick = agent.run_tick(
@@ -113,14 +116,14 @@ def test_waits_when_not_enough_klines_for_technical_signal(agent, monkeypatch):
         _view(TradeDirection.LONG),
         position=None,
         mark_price=100.0,
-        klines=_rising_klines(n=5),  # troppo poche candele
+        klines=_rising_klines(n=5),  # troppo poche candele per EMA/ATR
         account=agent._broker.get_account_state(),
         risk_params=_risk_params(),
         current_stop_loss=None,
         current_take_profit=None,
     )
 
-    assert tick.execution_result is None
+    assert tick.execution_result is not None
 
 
 def test_closes_position_when_view_flips_to_flat(agent, monkeypatch):

@@ -40,3 +40,23 @@ export interface SessionStatusResponse {
   fees_paid_today: number
   funding_paid_today: number
 }
+
+export interface TradeDaySummary {
+  date: string
+  trades_count: number
+  total_realized_pnl: number
+  total_fees: number
+}
+
+export interface TradeDetail {
+  id: number
+  created_at: string
+  session_id: number
+  symbol: string
+  side: string
+  status: string
+  quantity: number
+  avg_fill_price: number | null
+  fee: number
+  realized_pnl: number | null
+}

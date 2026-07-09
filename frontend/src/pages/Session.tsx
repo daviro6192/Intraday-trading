@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../api/client'
-import type { AccountState, SessionStatus, SessionStatusResponse } from '../api/types'
+import type { AccountState, SessionStatus, SessionStatusResponse, TradeDaySummary, TradeDetail } from '../api/types'
 import { useAuth } from '../context/AuthContext'
 
 const POLL_INTERVAL_MS = 3000
@@ -35,6 +35,9 @@ export function SessionPage() {
   const [status, setStatus] = useState<SessionStatusResponse | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tradeDays, setTradeDays] = useState<TradeDaySummary[]>([])
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [tradeDetails, setTradeDetails] = useState<TradeDetail[] | null>(null)
   const pollRef = useRef<number | null>(null)
 
   const refreshAccount = useCallback(async () => {
@@ -53,10 +56,41 @@ export function SessionPage() {
     }
   }, [])
 
+  const refreshTradeDays = useCallback(async () => {
+    try {
+      const days = await api.get<TradeDaySummary[]>('/trades/days')
+      days.sort((a, b) => (a.date < b.date ? 1 : -1))
+      setTradeDays(days)
+      setSelectedDay((current) => current ?? days[0]?.date ?? null)
+    } catch {
+      setTradeDays([])
+    }
+  }, [])
+
   useEffect(() => {
     void refreshAccount()
     void refreshStatus()
-  }, [refreshAccount, refreshStatus])
+    void refreshTradeDays()
+  }, [refreshAccount, refreshStatus, refreshTradeDays])
+
+  useEffect(() => {
+    if (!selectedDay) {
+      setTradeDetails(null)
+      return
+    }
+    let cancelled = false
+    api
+      .get<TradeDetail[]>(`/trades/days/${selectedDay}`)
+      .then((details) => {
+        if (!cancelled) setTradeDetails(details)
+      })
+      .catch(() => {
+        if (!cancelled) setTradeDetails(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedDay])
 
   const isActive = status?.status === 'running' || status?.status === 'error'
 
@@ -100,6 +134,7 @@ export function SessionPage() {
       const stopped = await api.post<SessionStatusResponse>('/session/stop')
       setStatus(stopped)
       await refreshAccount()
+      await refreshTradeDays()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Errore nello stop della sessione')
     } finally {
@@ -235,6 +270,89 @@ export function SessionPage() {
           )}
         </section>
       )}
+
+      <section className="card">
+        <div className="page-header">
+          <h2>Storico trade</h2>
+          {tradeDays.length > 0 && (
+            <select value={selectedDay ?? ''} onChange={(e) => setSelectedDay(e.target.value)}>
+              {tradeDays.map((day) => (
+                <option key={day.date} value={day.date}>
+                  {day.date} — {day.trades_count} trade
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {tradeDays.length === 0 ? (
+          <p className="field-hint">Nessun trade eseguito ancora.</p>
+        ) : (
+          selectedDay && (
+            <>
+              {(() => {
+                const summary = tradeDays.find((day) => day.date === selectedDay)
+                if (!summary) return null
+                return (
+                  <div className="stat-row">
+                    <div className="stat">
+                      <span className="stat-label">Trade</span>
+                      <span className="stat-value mono-num">{summary.trades_count}</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-label">P&amp;L realizzato</span>
+                      <span className={`stat-value mono-num ${pnlClass(summary.total_realized_pnl)}`}>
+                        {formatSigned(summary.total_realized_pnl)}
+                      </span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-label">Fee pagate</span>
+                      <span className="stat-value mono-num">${formatUsd(summary.total_fees)}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {tradeDetails === null ? (
+                <p className="field-hint">Caricamento…</p>
+              ) : (
+                <table className="positions-table">
+                  <thead>
+                    <tr>
+                      <th>Ora</th>
+                      <th>Simbolo</th>
+                      <th>Lato</th>
+                      <th>Quantità</th>
+                      <th>Prezzo</th>
+                      <th>Fee</th>
+                      <th>P&amp;L realizzato</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tradeDetails.map((trade) => (
+                      <tr key={trade.id}>
+                        <td className="mono-num">{new Date(trade.created_at).toLocaleTimeString()}</td>
+                        <td>{trade.symbol}</td>
+                        <td>
+                          <span className={`badge ${trade.side === 'buy' ? 'badge-long' : 'badge-short'}`}>
+                            {trade.side === 'buy' ? 'Buy' : 'Sell'}
+                          </span>
+                        </td>
+                        <td className="mono-num">{trade.quantity.toLocaleString()}</td>
+                        <td className="mono-num">{trade.avg_fill_price?.toFixed(2) ?? '—'}</td>
+                        <td className="mono-num">${trade.fee.toFixed(4)}</td>
+                        <td className={`mono-num ${pnlClass(trade.realized_pnl)}`}>
+                          {trade.realized_pnl === null ? '—' : formatSigned(trade.realized_pnl)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
+          )
+        )}
+      </section>
     </div>
   )
 }

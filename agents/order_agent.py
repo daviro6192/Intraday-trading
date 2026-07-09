@@ -144,9 +144,13 @@ class OrderAgent:
             # Posizione coerente ed entro i livelli: nessuna azione questo tick.
             return OrderAgentTick(new_stop_loss=current_stop_loss, new_take_profit=current_take_profit)
 
-        # 3. Nessuna posizione: serve una conferma tecnica di timing prima di entrare.
+        # 3. Nessuna posizione: entra subito, a meno che il momentum tecnico
+        # immediato non sia chiaramente CONTRARIO alla direzione della
+        # strategia (non serve che coincida: fondamentali lenti e momentum
+        # tecnico breve termine sono segnali indipendenti, richiedere che si
+        # allineino esattamente rende gli ingressi troppo rari).
         timing_direction = _timing_signal(klines)
-        if timing_direction is not view.direction:
+        if timing_direction is not None and timing_direction is not view.direction:
             return OrderAgentTick()
 
         return self._open(symbol, view.direction, mark_price, klines, account, risk_params)

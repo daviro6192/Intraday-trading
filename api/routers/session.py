@@ -73,8 +73,12 @@ def _read_status(user: User, db: Session) -> SessionStatusResponse:
         starting_equity=latest_db_session.starting_equity,
         current_equity=account.equity,
         session_pnl=session_pnl,
-        fees_paid_today=account.fees_paid_today,
-        funding_paid_today=account.funding_paid_today,
+        # fees_paid_today/funding_paid_today sul broker sono cumulativi da
+        # sempre: sottraiamo quanto già pagato prima dell'avvio di QUESTA
+        # sessione, altrimenti mostrerebbero il totale storico dell'account,
+        # non quanto pagato durante la sessione in corso.
+        fees_paid_today=account.fees_paid_today - latest_db_session.starting_fees_paid,
+        funding_paid_today=account.funding_paid_today - latest_db_session.starting_funding_paid,
     )
 
 

@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from api.deps import get_db
+from api.deps import get_db, get_session_factory_dep
 from api.main import app
 from storage.db import get_engine, get_session_factory, init_db
 
@@ -29,6 +29,7 @@ def client(tmp_path) -> Iterator[TestClient]:
             session.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_session_factory_dep] = lambda: factory
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

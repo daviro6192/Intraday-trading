@@ -63,3 +63,23 @@ class SessionStatusResponse(BaseModel):
     session_pnl: float | None
     fees_paid_today: float
     funding_paid_today: float
+
+
+class TradeDaySummary(BaseModel):
+    date: str  # YYYY-MM-DD (UTC)
+    trades_count: int
+    total_realized_pnl: float
+    total_fees: float
+
+
+class TradeDetail(BaseModel):
+    id: int
+    created_at: datetime
+    session_id: int
+    symbol: str
+    side: str
+    status: str
+    quantity: float
+    avg_fill_price: float | None
+    fee: float
+    realized_pnl: float | None

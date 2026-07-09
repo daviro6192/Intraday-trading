@@ -154,6 +154,20 @@ def test_session_start_runs_ticks_and_stop_is_clean(client: TestClient):
     assert db_count == final_status.json()["trades_executed"]
 
 
+def test_stop_closes_all_open_positions_immediately(client: TestClient):
+    _register(client)
+    client.post("/api/session/start")
+
+    time.sleep(0.6)
+    account_while_running = client.get("/api/account/state").json()
+    assert len(account_while_running["open_positions"]) >= 1  # il tick veloce ha aperto una posizione LONG su BTCUSDT
+
+    client.post("/api/session/stop")
+
+    account_after_stop = client.get("/api/account/state").json()
+    assert account_after_stop["open_positions"] == []
+
+
 def test_starting_a_second_session_while_one_is_running_is_rejected(client: TestClient):
     _register(client)
     client.post("/api/session/start")

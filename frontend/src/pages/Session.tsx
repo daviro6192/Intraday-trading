@@ -107,7 +107,11 @@ export function SessionPage() {
     }
   }
 
-  const totalPnlToday = account ? account.realized_pnl_today + account.unrealized_pnl_today : null
+  // Netto di fee e funding, come l'equity: altrimenti non torna con il P&L
+  // di sessione (che riflette il movimento reale dell'equity dall'avvio).
+  const totalPnlToday = account
+    ? account.realized_pnl_today + account.unrealized_pnl_today - account.fees_paid_today - account.funding_paid_today
+    : null
   const currentStatus = status?.status ?? 'not_started'
 
   return (

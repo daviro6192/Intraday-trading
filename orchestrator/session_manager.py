@@ -14,9 +14,10 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from common.schemas import ExecutionResult
 from orchestrator.cycles import SessionState, run_fundamental_strategy_cycle, run_order_risk_tick
 from orchestrator.factory import LiveComponents, build_live_components_for_user, persist_live_state
-from storage.models import TradingSession, User
+from storage.models import TradingSession, User, persist_trade_tick
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +46,29 @@ class LiveSession:
         for task in (self._slow_task, self._fast_task):
             if task is not None:
                 await task
+
+        # Premere "Fine" deve azzerare l'esposizione subito: senza più un
+        # ciclo veloce a monitorarle, le posizioni aperte resterebbero senza
+        # gestione (nessuno stop-loss/take-profit più verificato) finché non
+        # si riavvia una sessione.
+        closed = await asyncio.to_thread(self._close_all_open_positions)
+        self.state.trades_executed += len(closed)
+
         persist_live_state(
             self.components.session_factory, self.user_id, self.components.broker, self.state.risk_parameters
         )
+
+    def _close_all_open_positions(self) -> list[ExecutionResult]:
+        account = self.components.broker.get_account_state()
+        results: list[ExecutionResult] = []
+        for position in account.open_positions:
+            result = self.components.broker.close_position(position.symbol)
+            if result is None:
+                continue
+            results.append(result)
+            with self.components.session_factory() as db:
+                persist_trade_tick(db, session_id=self.db_session_id, order_intent=None, risk_decision=None, execution_result=result)
+        return results
 
     async def _wait_or_stop(self, seconds: float) -> None:
         try:

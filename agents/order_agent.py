@@ -33,14 +33,21 @@ from common.schemas import (
 
 logger = logging.getLogger(__name__)
 
-_EMA_FAST_PERIOD = 9
-_EMA_SLOW_PERIOD = 21
+_EMA_FAST_PERIOD = 5
+_EMA_SLOW_PERIOD = 13
 _ATR_PERIOD = 14
-_STOP_LOSS_ATR_MULTIPLIER = 1.5
-_TAKE_PROFIT_ATR_MULTIPLIER = 2.5
+# Stop/take-profit volutamente stretti (non lontani in proporzione dal
+# rapporto reward/risk precedente, ~1.6x): un target più vicino si raggiunge
+# più in fretta, quindi il capitale si libera e può rientrare più spesso,
+# senza ridurre il profitto atteso in valore assoluto (che dipende dal
+# rapporto stop/take, non dalla loro scala — vedi _open: la quantità è
+# dimensionata sul rischio in USD, quindi profitto atteso = rischio x
+# rapporto reward/risk, indipendente da quanto sono "larghi" i due livelli).
+_STOP_LOSS_ATR_MULTIPLIER = 0.8
+_TAKE_PROFIT_ATR_MULTIPLIER = 1.3
 # Fallback se non ci sono abbastanza klines per calcolare l'ATR (es. avvio a freddo).
-_FALLBACK_STOP_PCT = 0.01
-_FALLBACK_TAKE_PROFIT_PCT = 0.015
+_FALLBACK_STOP_PCT = 0.006
+_FALLBACK_TAKE_PROFIT_PCT = 0.01
 
 
 def _timing_signal(klines: list[dict] | None) -> TradeDirection | None:

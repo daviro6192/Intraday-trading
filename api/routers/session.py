@@ -79,6 +79,7 @@ def _read_status(user: User, db: Session) -> SessionStatusResponse:
         # non quanto pagato durante la sessione in corso.
         fees_paid_today=account.fees_paid_today - latest_db_session.starting_fees_paid,
         funding_paid_today=account.funding_paid_today - latest_db_session.starting_funding_paid,
+        symbol_selection_rationale=live_session.state.symbol_selection_rationale if live_session is not None else None,
     )
 
 

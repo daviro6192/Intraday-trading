@@ -64,6 +64,29 @@ class ExecutionStatus(str, Enum):
 
 
 # --------------------------------------------------------------------------
+# Screener: gira una volta all'avvio di ogni sessione per scegliere i 3
+# simboli da tradare tra un universo di candidati più ampio (non per forza
+# Bitcoin/Solana/altri simboli "storici") in base a volatilità/liquidità.
+# --------------------------------------------------------------------------
+
+
+class SymbolCandidate(BaseModel):
+    symbol: str
+    binance_perp: str
+    coingecko_id: str
+    price_change_24h_pct: float
+    quote_volume_24h_usdt: float
+
+
+class SymbolSelection(BaseModel):
+    """Wrapper per l'output dello screener: esattamente 3 ticker perpetual
+    (lo stesso valore `binance_perp` ricevuto in input tra i candidati)."""
+
+    selected_binance_perps: list[str] = Field(min_length=3, max_length=3)
+    rationale: str
+
+
+# --------------------------------------------------------------------------
 # Agente 1 -> Agente 2: analisi fondamentale crypto (niente sentiment/news)
 # --------------------------------------------------------------------------
 

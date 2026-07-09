@@ -31,6 +31,11 @@ class SessionState:
     stop_loss_by_symbol: dict[str, float] = field(default_factory=dict)
     take_profit_by_symbol: dict[str, float] = field(default_factory=dict)
     trades_executed: int = 0
+    # Motivazione dello screener (agents/symbol_screener_agent.py) per la
+    # scelta dei simboli di QUESTA sessione: perché il ciclo lento non li
+    # tocca più dopo l'avvio, questo campo non cambia mai durante la
+    # sessione — ha senso mostrarlo com'è, non serve un log dedicato.
+    symbol_selection_rationale: str = ""
 
 
 def _build_performance_summary(components: LiveComponents, state: SessionState) -> dict:

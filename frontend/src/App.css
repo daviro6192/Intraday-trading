@@ -160,6 +160,10 @@
   color: var(--text-dim);
 }
 
+.symbol-selection-rationale {
+  margin: -6px 0 0;
+}
+
 .form-message {
   font-size: 14px;
   color: var(--success);

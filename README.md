@@ -136,11 +136,14 @@ Claude/Binance/CoinGecko mockati (nessuna rete reale nei test).
 
 - `.env` (da `.env.example`): API key Claude, URL del database.
 - `config/trading.yaml`:
-  - `symbols`: i 3 simboli tracciati — `fixed` (Bitcoin), `altcoin` (un
-    top-10, es. Solana), `outsider` (un fast-grower, placeholder
-    configurabile: non c'è ancora uno screener automatico che lo scelga).
-    Ciascuno con `symbol`, `coingecko_id` (fondamentali) e `binance_perp`
-    (coppia futures USDT-M per prezzo/klines/funding).
+  - `symbol_universe`: l'elenco di coppie perpetual candidate (ciascuna con
+    `symbol`, `coingecko_id` e `binance_perp`) tra cui lo screener
+    (`agents/symbol_screener_agent.py`, Claude) sceglie i 3 simboli da
+    tradare a ogni avvio di sessione, in base a volatilità/liquidità delle
+    ultime 24h — non per forza Bitcoin o altri simboli "storici".
+  - `symbols_fallback`: gli stessi 3 campi del vecchio set fisso, usati solo
+    se lo screener non riesce a completare la scelta (Binance/Claude non
+    raggiungibili all'avvio): non deve mai impedire l'avvio di una sessione.
   - `cycles`: `slow_cycle_interval_minutes` (Agente 1+2, chiama Claude) e
     `fast_cycle_interval_seconds` (Agente 3+4, meccanico).
   - `execution`: cassa iniziale, leva di default, commissioni maker/taker
@@ -189,13 +192,10 @@ viene **mai** bloccato dal gate, a nessuna condizione.
 
 ## Limiti noti / prossimi passi
 
-- Il frontend non è ancora aggiornato per il nuovo modello a sessione
-  continua (in corso in un passaggio successivo).
-- Nessuno screener automatico per il simbolo "outsider" (terzo slot in
-  `config/trading.yaml`): va scelto e aggiornato manualmente per ora.
-- Il trigger di timing dell'Order Agent (incrocio EMA) è una scelta di
-  design minimale per abilitare trading ad alta frequenza senza Claude ad
-  ogni tick: sostituibile con altra logica meccanica senza toccare il resto
-  dell'architettura.
+- Lo screener sceglie i 3 simboli solo all'avvio di una sessione, non li
+  rivaluta più finché non la fermi e ne avvii una nuova.
+- L'universo di candidati (`symbol_universe` in `config/trading.yaml`) è
+  una lista curata a mano (serve una mappatura nota Binance -> CoinGecko),
+  non l'intero listino dei futures Binance.
 - Sessioni in-memory single-process: non sopravvivono a un riavvio del
   server (vedi nota sopra).

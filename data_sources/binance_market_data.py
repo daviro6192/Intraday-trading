@@ -91,6 +91,42 @@ def get_recent_klines(symbol: str, interval: str = "1m", limit: int = 50) -> lis
     ]
 
 
+def fetch_24h_ticker_stats(binance_perps: list[str]) -> dict[str, dict]:
+    """Variazione di prezzo % e volume scambiato (in USDT) nelle ultime 24h
+    per un insieme di coppie perpetual: una sola chiamata (l'endpoint senza
+    `symbol` restituisce tutte le coppie, filtriamo lato client), usata dallo
+    screener di simboli per stimare quali sono i più volatili/liquidi di
+    giornata. Ritorna un dict vuoto (mai un'eccezione) se Binance non è
+    raggiungibile o i dati sono malformati: il chiamante deve degradare con
+    un fallback statico."""
+    try:
+        response = requests.get(
+            f"{_BASE_URL}/fapi/v1/ticker/24hr",
+            headers={"User-Agent": _USER_AGENT},
+            timeout=_DEFAULT_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except (requests.RequestException, ValueError):
+        logger.warning("Binance non raggiungibile: impossibile recuperare le statistiche 24h")
+        return {}
+
+    wanted = set(binance_perps)
+    stats: dict[str, dict] = {}
+    for item in data:
+        symbol = item.get("symbol")
+        if symbol not in wanted:
+            continue
+        try:
+            stats[symbol] = {
+                "price_change_24h_pct": float(item["priceChangePercent"]),
+                "quote_volume_24h_usdt": float(item["quoteVolume"]),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+    return stats
+
+
 def validate_symbols_exist(symbols: list[str]) -> list[str]:
     """Verifica quali delle coppie perpetual configurate esistono realmente su
     Binance futures, interrogando /fapi/v1/exchangeInfo una volta sola.

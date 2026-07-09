@@ -63,6 +63,7 @@ class SessionStatusResponse(BaseModel):
     session_pnl: float | None
     fees_paid_today: float
     funding_paid_today: float
+    symbol_selection_rationale: str | None = None
 
 
 class StrategySymbolView(BaseModel):

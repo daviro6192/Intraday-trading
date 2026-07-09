@@ -3,12 +3,71 @@
 # simulata (futures USDT-M perpetual su Binance) e limiti di rischio.
 # Tutti i valori sono modificabili senza toccare il codice.
 #
-# Perimetro: 3 simboli fissi/configurabili — un'ancora (Bitcoin), un top-10
-# (es. Solana), un "outsider" fast-grower. Il terzo slot è un placeholder,
-# cambialo liberamente in base a cosa vuoi seguire: non esiste ancora uno
-# screener automatico che lo scelga da solo (possibile miglioramento futuro).
+# Perimetro: 3 simboli, scelti dinamicamente a ogni avvio di sessione dallo
+# screener (agents/symbol_screener_agent.py) tra i candidati elencati in
+# symbol_universe, in base a volatilità/liquidità delle ultime 24h — non per
+# forza Bitcoin/Solana/altri simboli "storici".
 
-symbols:
+symbol_universe:
+  - symbol: BTC
+    coingecko_id: bitcoin
+    binance_perp: BTCUSDT
+  - symbol: ETH
+    coingecko_id: ethereum
+    binance_perp: ETHUSDT
+  - symbol: SOL
+    coingecko_id: solana
+    binance_perp: SOLUSDT
+  - symbol: XRP
+    coingecko_id: ripple
+    binance_perp: XRPUSDT
+  - symbol: DOGE
+    coingecko_id: dogecoin
+    binance_perp: DOGEUSDT
+  - symbol: ADA
+    coingecko_id: cardano
+    binance_perp: ADAUSDT
+  - symbol: AVAX
+    coingecko_id: avalanche-2
+    binance_perp: AVAXUSDT
+  - symbol: LINK
+    coingecko_id: chainlink
+    binance_perp: LINKUSDT
+  - symbol: DOT
+    coingecko_id: polkadot
+    binance_perp: DOTUSDT
+  - symbol: LTC
+    coingecko_id: litecoin
+    binance_perp: LTCUSDT
+  - symbol: NEAR
+    coingecko_id: near
+    binance_perp: NEARUSDT
+  - symbol: APT
+    coingecko_id: aptos
+    binance_perp: APTUSDT
+  - symbol: ARB
+    coingecko_id: arbitrum
+    binance_perp: ARBUSDT
+  - symbol: OP
+    coingecko_id: optimism
+    binance_perp: OPUSDT
+  - symbol: SUI
+    coingecko_id: sui
+    binance_perp: SUIUSDT
+  - symbol: INJ
+    coingecko_id: injective-protocol
+    binance_perp: INJUSDT
+  - symbol: TIA
+    coingecko_id: celestia
+    binance_perp: TIAUSDT
+  - symbol: WIF
+    coingecko_id: dogwifcoin
+    binance_perp: WIFUSDT
+
+# Fallback statico se lo screener non riesce a completare la scelta (Binance
+# o Claude non raggiungibili all'avvio della sessione): mai lasciare che
+# l'avvio fallisca del tutto per questo.
+symbols_fallback:
   fixed:
     symbol: BTC
     coingecko_id: bitcoin

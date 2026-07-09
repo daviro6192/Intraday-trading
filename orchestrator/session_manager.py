@@ -128,7 +128,11 @@ class SessionManager:
             db_session_id = db_session.id
             started_at = db_session.started_at
 
-        state = SessionState(db_session_id=db_session_id, risk_parameters=components.default_risk_parameters)
+        state = SessionState(
+            db_session_id=db_session_id,
+            risk_parameters=components.default_risk_parameters,
+            symbol_selection_rationale=components.symbol_selection_rationale,
+        )
         live_session = LiveSession(user.id, db_session_id, components, state)
         self._sessions[user.id] = live_session
         live_session.start()

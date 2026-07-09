@@ -5,6 +5,7 @@ utente della piattaforma web, leggendo le sue impostazioni dal DB
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -13,12 +14,16 @@ from agents.fundamental_agent import FundamentalAgent
 from agents.order_agent import OrderAgent
 from agents.risk_agent import RiskReviewAgent
 from agents.strategy_agent import StrategyAgent
+from agents.symbol_screener_agent import SymbolScreenerAgent
 from broker.base import BrokerClient
 from broker.paper_broker import PaperBroker
 from common.claude_client import ClaudeClient
-from common.schemas import FeeSchedule, RiskParameters
+from common.schemas import FeeSchedule, RiskParameters, SymbolCandidate
 from config.settings import trading_config
+from data_sources.binance_market_data import fetch_24h_ticker_stats
 from storage.models import User, UserSettings
+
+logger = logging.getLogger(__name__)
 
 
 def build_fee_schedule_from_config() -> FeeSchedule:
@@ -76,6 +81,78 @@ def _default_risk_parameters(user_settings: UserSettings) -> RiskParameters:
     )
 
 
+def select_symbols_for_session(claude_client: ClaudeClient) -> tuple[dict[str, dict[str, str]], str]:
+    """Sceglie i 3 simboli su cui tradare per la sessione in arrivo,
+    interrogando lo screener su un universo di candidati più ampio di un
+    set fisso — in base a volatilità/liquidità delle ultime 24h, non per
+    forza Bitcoin/Solana/altri simboli "storici". Non deve mai impedire
+    l'avvio di una sessione: qualunque problema (Binance/Claude non
+    raggiungibili, risposta malformata) ripiega sul set fisso di fallback
+    in trading.yaml."""
+    universe = trading_config["symbol_universe"]
+    fallback_symbols: dict[str, dict[str, str]] = trading_config["symbols_fallback"]
+    fallback_rationale = "Screener non disponibile in questo momento: uso il set fisso di fallback."
+
+    stats = fetch_24h_ticker_stats([entry["binance_perp"] for entry in universe])
+    candidates = [
+        SymbolCandidate(
+            symbol=entry["symbol"],
+            binance_perp=entry["binance_perp"],
+            coingecko_id=entry["coingecko_id"],
+            price_change_24h_pct=stats[entry["binance_perp"]]["price_change_24h_pct"],
+            quote_volume_24h_usdt=stats[entry["binance_perp"]]["quote_volume_24h_usdt"],
+        )
+        for entry in universe
+        if entry["binance_perp"] in stats
+    ]
+    if len(candidates) < 3:
+        logger.warning(
+            "Screener: dati 24h insufficienti (%d/%d candidati disponibili), uso il set fisso di fallback",
+            len(candidates),
+            len(universe),
+        )
+        return fallback_symbols, fallback_rationale
+
+    by_binance_perp = {c.binance_perp: c for c in candidates}
+    try:
+        selection = SymbolScreenerAgent(claude_client).run(candidates)
+    except Exception:
+        logger.exception("Screener: chiamata a Claude fallita, uso il set fisso di fallback")
+        return fallback_symbols, fallback_rationale
+
+    # Dedup preservando l'ordine e scarta eventuali simboli non tra i
+    # candidati forniti: Claude deve scegliere solo da quell'elenco, ma non
+    # ci si affida ciecamente a un output strutturato pur validato.
+    selected_perps = [p for p in dict.fromkeys(selection.selected_binance_perps) if p in by_binance_perp]
+
+    if len(selected_perps) < 3:
+        logger.warning(
+            "Screener: Claude ha proposto solo %d simboli validi su 3 richiesti, completo con i più volatili rimasti",
+            len(selected_perps),
+        )
+        remaining = sorted(
+            (c for c in candidates if c.binance_perp not in selected_perps),
+            key=lambda c: abs(c.price_change_24h_pct),
+            reverse=True,
+        )
+        for candidate in remaining:
+            if len(selected_perps) >= 3:
+                break
+            selected_perps.append(candidate.binance_perp)
+
+    selected_perps = selected_perps[:3]
+    symbols = {
+        perp: {
+            "symbol": by_binance_perp[perp].symbol,
+            "coingecko_id": by_binance_perp[perp].coingecko_id,
+            "binance_perp": perp,
+        }
+        for perp in selected_perps
+    }
+    logger.info("Screener: simboli scelti per questa sessione %s - %s", list(symbols.keys()), selection.rationale)
+    return symbols, selection.rationale
+
+
 @dataclass
 class LiveComponents:
     user_id: int
@@ -91,6 +168,7 @@ class LiveComponents:
     cycles_config: dict
     session_factory: sessionmaker[Session]
     default_risk_parameters: RiskParameters
+    symbol_selection_rationale: str = ""
 
 
 def build_live_components_for_user(user: User, session_factory: sessionmaker[Session]) -> LiveComponents:
@@ -107,7 +185,7 @@ def build_live_components_for_user(user: User, session_factory: sessionmaker[Ses
     broker.connect()
 
     risk_limits = json.loads(user_settings.risk_limits_json)
-    symbols = json.loads(user_settings.symbols_json)
+    symbols, symbol_selection_rationale = select_symbols_for_session(claude_client)
 
     order_agent = OrderAgent(
         broker=broker,
@@ -125,6 +203,7 @@ def build_live_components_for_user(user: User, session_factory: sessionmaker[Ses
         broker=broker,
         claude_client=claude_client,
         symbols=symbols,
+        symbol_selection_rationale=symbol_selection_rationale,
         static_risk_limits=risk_limits,
         fee_schedule=fee_schedule,
         cycles_config=trading_config["cycles"],

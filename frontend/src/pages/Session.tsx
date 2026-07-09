@@ -207,6 +207,12 @@ export function SessionPage() {
         <h1>Ciao, {user?.username}</h1>
       </header>
 
+      {sessionIsLive && status?.symbol_selection_rationale && (
+        <p className="field-hint symbol-selection-rationale">
+          Simboli scelti per questa sessione: {status.symbol_selection_rationale}
+        </p>
+      )}
+
       {sessionIsLive && (
         <section className="strategy-scorecards">
           {strategyViews.length === 0 ? (

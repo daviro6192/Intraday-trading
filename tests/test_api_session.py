@@ -21,6 +21,7 @@ from common.schemas import (
     RiskParameters,
     StrategyView,
     StrategyViewBatch,
+    SymbolSelection,
     TradeDirection,
 )
 from config.settings import trading_config
@@ -60,6 +61,11 @@ def _canned_responses() -> dict:
             min_profit_over_fees_multiple=0.0,
             paused_symbols=[],
             rationale="test",
+        ),
+        # Stessi 3 simboli del vecchio set fisso: mantiene valide tutte le
+        # asserzioni esistenti su BTCUSDT senza doverle riscrivere.
+        "SymbolSelection": SymbolSelection(
+            selected_binance_perps=["BTCUSDT", "SOLUSDT", "INJUSDT"], rationale="test"
         ),
     }
 
@@ -109,6 +115,13 @@ def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
     monkeypatch.setattr("orchestrator.cycles.get_mark_price", lambda symbol: 100.0)
     monkeypatch.setattr("orchestrator.cycles.get_recent_klines", lambda symbol, **kwargs: _rising_klines())
     monkeypatch.setattr("data_sources.binance_market_data.get_funding_rate", lambda symbol: 0.0001)
+    # Mai rete reale nei test: statistiche 24h finte ma sufficienti (>= 3
+    # candidati) perché lo screener arrivi davvero a interrogare Claude
+    # invece di ripiegare subito sul set fisso di fallback.
+    monkeypatch.setattr(
+        "orchestrator.factory.fetch_24h_ticker_stats",
+        lambda binance_perps: {p: {"price_change_24h_pct": 1.0, "quote_volume_24h_usdt": 1_000_000.0} for p in binance_perps},
+    )
 
     with TestClient(app) as test_client:
         yield test_client

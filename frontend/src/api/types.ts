@@ -39,6 +39,7 @@ export interface SessionStatusResponse {
   session_pnl: number | null
   fees_paid_today: number
   funding_paid_today: number
+  symbol_selection_rationale: string | null
 }
 
 export type StrategyDirection = 'long' | 'short' | 'flat'

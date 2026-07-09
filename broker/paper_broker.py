@@ -264,6 +264,7 @@ class PaperBroker:
                 signed_qty = max_reducible if signed_qty > 0 else -max_reducible
 
         fee = quantity * fill_price * self._fee_schedule.taker_fee_pct
+        realized_pnl: float | None = None
 
         if existing is None or existing.quantity == 0:
             required_margin = quantity * fill_price / leverage
@@ -311,9 +312,9 @@ class PaperBroker:
             else:
                 closing_qty = min(abs(existing.quantity), abs(signed_qty))
                 direction = 1 if existing.quantity > 0 else -1
-                realized = closing_qty * (fill_price - existing.avg_price) * direction
-                self._realized_pnl_today += realized
-                self._cash += realized
+                realized_pnl = closing_qty * (fill_price - existing.avg_price) * direction
+                self._realized_pnl_today += realized_pnl
+                self._cash += realized_pnl
                 self._cash -= fee
                 self._fees_paid_today += fee
 
@@ -380,6 +381,7 @@ class PaperBroker:
             filled_quantity=quantity,
             avg_fill_price=fill_price,
             fee=fee,
+            realized_pnl=realized_pnl,
         )
 
     def close_position(self, symbol: str) -> ExecutionResult | None:

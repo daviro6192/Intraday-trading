@@ -78,6 +78,22 @@ def test_realized_pnl_and_fee_on_closing_a_long_position(broker, monkeypatch):
     assert state.equity == pytest.approx(100_000.0 + 300.0 - state.fees_paid_today)
 
 
+def test_closing_execution_result_carries_its_own_realized_pnl(broker, monkeypatch):
+    """L'ExecutionResult di una chiusura deve riportare il P&L realizzato di
+    QUEL trade, non solo aggiornare l'accumulo interno del broker: è il
+    valore che finisce nello storico trade per-riga (api/routers/trades.py),
+    altrimenti ogni riga mostra "nessun P&L" anche quando ce n'è uno reale."""
+    prices = iter([100.0, 130.0])
+    monkeypatch.setattr("broker.paper_broker.get_mark_price", lambda symbol: next(prices, 130.0))
+
+    open_result = broker.place_order("BTCUSDT", OrderSide.BUY, quantity=10, leverage=1, reference_price=100.0)
+    close_result = broker.close_position("BTCUSDT")
+
+    assert open_result.realized_pnl is None  # aprire non realizza nulla
+    assert close_result is not None
+    assert close_result.realized_pnl == pytest.approx(300.0)  # 10 unità x (130 - 100)
+
+
 def test_short_position_profits_when_price_falls(broker, monkeypatch):
     prices = iter([100.0, 80.0])
     monkeypatch.setattr("broker.paper_broker.get_mark_price", lambda symbol: next(prices, 80.0))

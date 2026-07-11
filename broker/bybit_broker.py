@@ -21,9 +21,11 @@ Architettura, rispetto a Binance/Crypto.com:
   header X-BAPI-SIGN = HMAC-SHA256(timestamp+api_key+recv_window+query_o_body);
 - creazione ordine ASINCRONA come Crypto.com: /v5/order/create risponde solo
   con orderId, va interrogato /v5/order/history per fill/prezzo/quantità;
-- margine isolato per simbolo tramite un semplice switch per simbolo
-  (/v5/position/switch-isolated + /v5/position/set-leverage), niente
-  meccanismo isolation_id da tracciare come Crypto.com;
+- margine isolato impostato UNA VOLTA a livello di intero conto
+  (/v5/account/set-margin-mode — su un Unified Trading Account l'endpoint
+  per-simbolo position/switch-isolated risponde "unified account is
+  forbidden", osservato dal vivo) + leva per simbolo (/v5/position/set-leverage),
+  niente meccanismo isolation_id da tracciare come Crypto.com;
 - P&L realizzato per-trade ESPOSTO direttamente da Bybit
   (/v5/position/closed-pnl, campo closedPnl per orderId) — a differenza di
   Crypto.com non va calcolato da noi; si ripiega sul calcolo da
@@ -93,7 +95,7 @@ class BybitBroker:
         self._session = requests.Session()
 
         self._instrument_info: dict[str, dict] | None = None
-        self._isolated_configured: set[str] = set()
+        self._isolated_mode_set = False
         self._leverage_by_symbol: dict[str, float] = {}
         self._account_state_cache: tuple[float, AccountState] | None = None
         self._server_time_offset_ms = 0.0
@@ -336,28 +338,34 @@ class BybitBroker:
             return None
         return rounded
 
+    @staticmethod
+    def _is_benign_already_set(response: dict, code: int) -> bool:
+        """Alcuni retCode "già impostato così" non sono verificati dai doc
+        caricati in questa sessione: oltre alla lista nota, si riconosce
+        anche il caso per testo del messaggio ("not modified"), più
+        robusto quando non si conosce il codice esatto per un endpoint."""
+        return code in _ALREADY_SET_CODES or "not modified" in str(response.get("retMsg", "")).lower()
+
     def _ensure_isolated_and_leverage(self, symbol: str, leverage: float) -> str | None:
         """Ritorna un messaggio di errore (l'ordine va rifiutato senza
-        nemmeno arrivare a Bybit) o None se tutto ok."""
-        if symbol not in self._isolated_configured:
+        nemmeno arrivare a Bybit) o None se tutto ok.
+
+        Su un account Unified Trading Account (UTA) il margine isolato si
+        imposta a LIVELLO DI CONTO (account/set-margin-mode), non per
+        singolo simbolo: l'endpoint per-simbolo (position/switch-isolated,
+        pensato per i vecchi account "Classic") risponde "unified account
+        is forbidden" su UTA — osservato dal vivo sul conto reale
+        dell'utente, non solo dedotto dai doc."""
+        if not self._isolated_mode_set:
             response = self._signed_request(
-                "POST",
-                "/v5/position/switch-isolated",
-                {
-                    "category": _CATEGORY,
-                    "symbol": symbol,
-                    "tradeMode": 1,
-                    "buyLeverage": str(leverage),
-                    "sellLeverage": str(leverage),
-                },
+                "POST", "/v5/account/set-margin-mode", {"setMarginMode": "ISOLATED_MARGIN"}
             )
             code = self._ret_code(response)
-            if code is not None and code not in _ALREADY_SET_CODES:
-                return f"Impossibile impostare margine isolato per {symbol}: {response.get('retMsg')}"
+            if code is not None and not self._is_benign_already_set(response, code):
+                return f"Impossibile impostare margine isolato sul conto: {response.get('retMsg')}"
             if response is None:
-                return f"Bybit non raggiungibile (impostazione margine isolato per {symbol})"
-            self._isolated_configured.add(symbol)
-            self._leverage_by_symbol[symbol] = leverage
+                return "Bybit non raggiungibile (impostazione margine isolato sul conto)"
+            self._isolated_mode_set = True
 
         if self._leverage_by_symbol.get(symbol) != leverage:
             response = self._signed_request(
@@ -366,7 +374,7 @@ class BybitBroker:
                 {"category": _CATEGORY, "symbol": symbol, "buyLeverage": str(leverage), "sellLeverage": str(leverage)},
             )
             code = self._ret_code(response)
-            if code is not None and code not in _ALREADY_SET_CODES:
+            if code is not None and not self._is_benign_already_set(response, code):
                 return f"Impossibile impostare leva {leverage}x per {symbol}: {response.get('retMsg')}"
             if response is None:
                 return f"Bybit non raggiungibile (impostazione leva per {symbol})"

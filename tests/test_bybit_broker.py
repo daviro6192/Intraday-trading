@@ -423,6 +423,10 @@ def test_close_position_delegates_to_place_order(broker, monkeypatch):
 
 
 def test_ensure_isolated_and_leverage_sets_up_once(broker, monkeypatch):
+    """Il margine isolato è a livello di intero conto (account/set-margin-mode
+    su una UTA — position/switch-isolated risponde "unified account is
+    forbidden"): va chiamato una sola volta per l'intero processo, non per
+    simbolo. La leva resta invece per-simbolo."""
     calls = []
 
     def fake_signed_request(method, path, params):
@@ -434,7 +438,22 @@ def test_ensure_isolated_and_leverage_sets_up_once(broker, monkeypatch):
     assert broker._ensure_isolated_and_leverage("BTCUSDT", 3.0) is None
     assert broker._ensure_isolated_and_leverage("BTCUSDT", 3.0) is None  # stessa leva: nessuna nuova chiamata
 
-    assert calls == ["/v5/position/switch-isolated"]
+    assert calls == ["/v5/account/set-margin-mode", "/v5/position/set-leverage"]
+
+
+def test_ensure_isolated_and_leverage_does_not_repeat_account_setup_for_another_symbol(broker, monkeypatch):
+    calls = []
+
+    def fake_signed_request(method, path, params):
+        calls.append(path)
+        return {"retCode": 0, "result": {}}
+
+    monkeypatch.setattr(broker, "_signed_request", fake_signed_request)
+
+    broker._ensure_isolated_and_leverage("BTCUSDT", 3.0)
+    broker._ensure_isolated_and_leverage("ETHUSDT", 3.0)
+
+    assert calls == ["/v5/account/set-margin-mode", "/v5/position/set-leverage", "/v5/position/set-leverage"]
 
 
 def test_ensure_isolated_and_leverage_updates_leverage_on_change(broker, monkeypatch):
@@ -449,7 +468,20 @@ def test_ensure_isolated_and_leverage_updates_leverage_on_change(broker, monkeyp
     broker._ensure_isolated_and_leverage("BTCUSDT", 3.0)
     broker._ensure_isolated_and_leverage("BTCUSDT", 5.0)
 
-    assert calls == ["/v5/position/switch-isolated", "/v5/position/set-leverage"]
+    assert calls == ["/v5/account/set-margin-mode", "/v5/position/set-leverage", "/v5/position/set-leverage"]
+
+
+def test_ensure_isolated_and_leverage_treats_not_modified_message_as_success(broker, monkeypatch):
+    """Codice di errore sconosciuto ma messaggio che indica idempotenza
+    ("not modified"): va trattato come già impostato, non come fallimento —
+    codici esatti non verificati contro i doc per questo endpoint."""
+    monkeypatch.setattr(
+        broker,
+        "_signed_request",
+        lambda method, path, params: {"retCode": 99999, "retMsg": "Margin mode is not modified"},
+    )
+
+    assert broker._ensure_isolated_and_leverage("BTCUSDT", 3.0) is None
 
 
 def test_ensure_isolated_and_leverage_returns_error_on_failure(broker, monkeypatch):

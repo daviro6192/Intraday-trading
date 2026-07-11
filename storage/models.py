@@ -85,6 +85,11 @@ class UserSettings(Base):
     binance_testnet_api_key_encrypted: Mapped[str] = mapped_column(Text, default="")
     binance_testnet_api_secret_encrypted: Mapped[str] = mapped_column(Text, default="")
 
+    # Credenziali Crypto.com Exchange (UAT Sandbox), stesso principio delle
+    # credenziali Binance sopra. Usate solo quando trading_mode="crypto_com_testnet".
+    crypto_com_api_key_encrypted: Mapped[str] = mapped_column(Text, default="")
+    crypto_com_api_secret_encrypted: Mapped[str] = mapped_column(Text, default="")
+
     # Blob JSON: struttura identica alle rispettive sezioni di config/trading.yaml
     symbols_json: Mapped[str] = mapped_column(Text, default="{}")
     risk_limits_json: Mapped[str] = mapped_column(Text, default="{}")

@@ -190,13 +190,29 @@ viene **mai** bloccato dal gate, a nessuna condizione.
   riconciliazione dopo un crash del processo a metà posizione; leva/margin
   type impostati in-memory per istanza (ri-applicati, idempotenti, al primo
   ordine dopo un riavvio).
+- **CryptoComBroker** (`broker/crypto_com_broker.py`): esecuzione reale
+  contro Crypto.com Exchange **UAT Sandbox** (fondi finti) —
+  `trading_mode: "crypto_com_testnet"`, alternativa a Binance per chi non
+  può usarlo (es. restrizioni geografiche). Architettura diversa da Binance:
+  stile JSON-RPC su POST (non query-string), firma HMAC-SHA256 su
+  `method+id+api_key+parametri+nonce`, creazione ordine asincrona (va
+  interrogato `get-order-detail` per il fill), margine isolato per simbolo
+  via `isolation_id` (assegnato dal primo ordine su un simbolo, invalidato
+  dopo una chiusura completa). Il P&L realizzato per-trade non è esposto
+  dall'exchange (solo a livello di posizione/conto): viene calcolato da
+  prezzo di entrata/uscita reali. Limiti noti: `funding_paid_today` non
+  affidabile (nessun campo isolato individuato), `liquidation_price` non
+  disponibile via REST (solo per la sottoscrizione WebSocket, non usata
+  qui), ciclo di vita di `isolation_id` dedotto dai doc non verificato dal
+  vivo.
 - **IBKRClient** (`broker/ibkr_client.py`): **legacy, non collegato alla
   pipeline** — scritto per bracket order azionari con stop/take-profit
   obbligatori, un modello diverso dalle entrate/uscite dirette long/short di
   questa versione. Resta nel repository come riferimento; andrebbe riscritto
   se in futuro si tornerà all'esecuzione reale su azioni.
-- **Mainnet Binance reale**: non collegato — valutato come fast-follow solo
-  dopo aver validato l'integrazione testnet, con capitale vero in gioco.
+- **Mainnet reale** (Binance o Crypto.com): non collegato — valutato come
+  fast-follow solo dopo aver validato l'integrazione testnet scelta, con
+  capitale vero in gioco.
 
 ## Limiti noti / prossimi passi
 

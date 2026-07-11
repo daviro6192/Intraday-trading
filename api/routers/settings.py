@@ -16,7 +16,7 @@ from common.crypto import encrypt_secret
 from common.pricing import estimate_cost_usd
 from storage.models import User
 
-_VALID_TRADING_MODES = {"paper", "binance_testnet"}
+_VALID_TRADING_MODES = {"paper", "binance_testnet", "crypto_com_testnet"}
 
 router = APIRouter(prefix="/api", tags=["settings"])
 
@@ -32,6 +32,9 @@ def _to_response(user: User) -> SettingsResponse:
         ibkr_client_id=s.ibkr_client_id,
         has_binance_testnet_credentials=bool(
             s.binance_testnet_api_key_encrypted and s.binance_testnet_api_secret_encrypted
+        ),
+        has_crypto_com_testnet_credentials=bool(
+            s.crypto_com_api_key_encrypted and s.crypto_com_api_secret_encrypted
         ),
     )
 
@@ -58,6 +61,10 @@ def update_settings(
         s.binance_testnet_api_key_encrypted = encrypt_secret(updates.pop("binance_testnet_api_key"))
     if "binance_testnet_api_secret" in updates:
         s.binance_testnet_api_secret_encrypted = encrypt_secret(updates.pop("binance_testnet_api_secret"))
+    if "crypto_com_api_key" in updates:
+        s.crypto_com_api_key_encrypted = encrypt_secret(updates.pop("crypto_com_api_key"))
+    if "crypto_com_api_secret" in updates:
+        s.crypto_com_api_secret_encrypted = encrypt_secret(updates.pop("crypto_com_api_secret"))
 
     for field, value in updates.items():
         setattr(s, field, value)

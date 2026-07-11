@@ -26,7 +26,7 @@ export interface AccountState {
   as_of: string
 }
 
-export type TradingMode = 'paper' | 'binance_testnet'
+export type TradingMode = 'paper' | 'binance_testnet' | 'crypto_com_testnet'
 
 export interface SettingsResponse {
   has_api_key: boolean
@@ -36,6 +36,7 @@ export interface SettingsResponse {
   ibkr_port: number
   ibkr_client_id: number
   has_binance_testnet_credentials: boolean
+  has_crypto_com_testnet_credentials: boolean
 }
 
 export interface SettingsUpdateRequest {
@@ -44,6 +45,8 @@ export interface SettingsUpdateRequest {
   trading_mode?: TradingMode
   binance_testnet_api_key?: string
   binance_testnet_api_secret?: string
+  crypto_com_api_key?: string
+  crypto_com_api_secret?: string
 }
 
 export type SessionStatus = 'not_started' | 'running' | 'stopped' | 'interrupted' | 'error'

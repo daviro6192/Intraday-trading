@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from broker.binance_futures_testnet_broker import BinanceFuturesTestnetBroker
+from broker.crypto_com_broker import CryptoComBroker
 from broker.paper_broker import PaperBroker
 from common.crypto import encrypt_secret
 from common.schemas import FeeSchedule, RiskParameters
@@ -73,3 +74,26 @@ def test_build_broker_for_user_builds_binance_testnet_broker_with_valid_credenti
     broker = build_broker_for_user(user_settings, _fee_schedule())
 
     assert isinstance(broker, BinanceFuturesTestnetBroker)
+
+
+def test_build_broker_for_user_raises_when_crypto_com_testnet_mode_has_no_credentials() -> None:
+    user_settings = SimpleNamespace(
+        trading_mode="crypto_com_testnet",
+        crypto_com_api_key_encrypted="",
+        crypto_com_api_secret_encrypted="",
+    )
+
+    with pytest.raises(ValueError, match="Impostazioni"):
+        build_broker_for_user(user_settings, _fee_schedule())
+
+
+def test_build_broker_for_user_builds_crypto_com_broker_with_valid_credentials() -> None:
+    user_settings = SimpleNamespace(
+        trading_mode="crypto_com_testnet",
+        crypto_com_api_key_encrypted=encrypt_secret("my-key"),
+        crypto_com_api_secret_encrypted=encrypt_secret("my-secret"),
+    )
+
+    broker = build_broker_for_user(user_settings, _fee_schedule())
+
+    assert isinstance(broker, CryptoComBroker)

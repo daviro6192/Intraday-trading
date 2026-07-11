@@ -17,6 +17,7 @@ from agents.strategy_agent import StrategyAgent
 from agents.symbol_screener_agent import SymbolScreenerAgent
 from broker.base import BrokerClient
 from broker.binance_futures_testnet_broker import BinanceFuturesTestnetBroker
+from broker.crypto_com_broker import CryptoComBroker
 from broker.paper_broker import PaperBroker
 from common.claude_client import ClaudeClient
 from common.crypto import decrypt_secret
@@ -51,6 +52,22 @@ def build_broker_for_user(user_settings: UserSettings, fee_schedule: FeeSchedule
                 "(registrato separatamente su testnet.binancefuture.com, non il tuo account Binance reale)."
             )
         return BinanceFuturesTestnetBroker(
+            api_key=api_key,
+            api_secret=api_secret,
+            fee_schedule=fee_schedule,
+            default_leverage=execution_config["default_leverage"],
+        )
+
+    if user_settings.trading_mode == "crypto_com_testnet":
+        api_key = decrypt_secret(user_settings.crypto_com_api_key_encrypted)
+        api_secret = decrypt_secret(user_settings.crypto_com_api_secret_encrypted)
+        if not api_key or not api_secret:
+            raise ValueError(
+                "Modalità Crypto.com Exchange Testnet selezionata ma nessuna credenziale salvata: vai su "
+                "Impostazioni e inserisci API key/secret del tuo account Crypto.com Exchange UAT Sandbox "
+                "(ambiente separato dall'account di produzione)."
+            )
+        return CryptoComBroker(
             api_key=api_key,
             api_secret=api_secret,
             fee_schedule=fee_schedule,

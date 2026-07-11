@@ -46,6 +46,33 @@ def test_no_binance_credentials_by_default(client: TestClient):
     _register(client)
     response = client.get("/api/settings")
     assert response.json()["has_binance_testnet_credentials"] is False
+    assert response.json()["has_crypto_com_testnet_credentials"] is False
+
+
+def test_saving_crypto_com_credentials_never_echoes_the_raw_secret(client: TestClient):
+    _register(client)
+
+    update = client.put(
+        "/api/settings",
+        json={"crypto_com_api_key": "abc123", "crypto_com_api_secret": "super-secret"},
+    )
+    assert update.status_code == 200
+    body = update.json()
+    assert body["has_crypto_com_testnet_credentials"] is True
+    assert "abc123" not in str(body)
+    assert "super-secret" not in str(body)
+
+    read_back = client.get("/api/settings").json()
+    assert read_back["has_crypto_com_testnet_credentials"] is True
+    assert "abc123" not in str(read_back)
+    assert "super-secret" not in str(read_back)
+
+
+def test_crypto_com_testnet_is_a_valid_trading_mode(client: TestClient):
+    _register(client)
+    response = client.put("/api/settings", json={"trading_mode": "crypto_com_testnet"})
+    assert response.status_code == 200
+    assert response.json()["trading_mode"] == "crypto_com_testnet"
 
 
 def test_saving_binance_credentials_never_echoes_the_raw_secret(client: TestClient):

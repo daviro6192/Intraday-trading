@@ -158,6 +158,15 @@ profitto sulle fee, simboli da mettere in pausa) in base a ciò che osservi:
   in pausa un simbolo che non ha ancora avuto occasione di essere tradato —
   l'obiettivo della piattaforma è testare la strategia con trade reali, non
   evitare a priori simboli volatili;
+- eccezione alla regola sopra: se il riepilogo performance riporta conteggi
+  in "rifiuti_quantita_minima_broker_per_simbolo" (un simbolo rifiutato più
+  volte dal broker perché la quantità ordinabile risulta sotto il minimo
+  dell'exchange, dato il capitale disponibile), è già prova sufficiente per
+  mettere IMMEDIATAMENTE quel simbolo in pausa, anche senza alcun trade
+  eseguito: è un limite strutturale del capitale su quello specifico
+  simbolo/exchange, non una questione di rischio o di performance — nessun
+  numero di tentativi ulteriori lo sbloccherà finché il capitale non
+  aumenta;
 - puoi anche allentare i parametri rispetto alla chiamata precedente se le
   performance lo giustificano, ma NON puoi mai superare i tetti massimi
   configurati a livello di sistema (verranno comunque forzati nel codice,

@@ -17,6 +17,13 @@ from storage.models import persist_analysis_cycle, persist_risk_parameters, pers
 
 logger = logging.getLogger(__name__)
 
+# Sottostringa condivisa dai messaggi di rifiuto "quantità sotto il minimo
+# ordinabile" di tutti i broker reali (broker/binance_futures_testnet_broker.py,
+# broker/crypto_com_broker.py, broker/bybit_broker.py): usata qui per
+# distinguere un rifiuto strutturale (capitale insufficiente per quel
+# simbolo su quell'exchange) da un rifiuto di rischio o di rete.
+_MIN_SIZE_REJECTION_MARKER = "quantità troppo piccola"
+
 
 @dataclass
 class SessionState:
@@ -36,6 +43,14 @@ class SessionState:
     # tocca più dopo l'avvio, questo campo non cambia mai durante la
     # sessione — ha senso mostrarlo com'è, non serve un log dedicato.
     symbol_selection_rationale: str = ""
+    # Quante volte, in questa sessione, il broker ha rifiutato un ordine
+    # perché la quantità risultava sotto il minimo ordinabile dell'exchange
+    # (capitale insufficiente per quel simbolo, non un giudizio di rischio):
+    # a differenza delle altre pause, che richiedono trade DAVVERO eseguiti
+    # come prova, qui il solo conteggio di rifiuti è già prova sufficiente —
+    # nessun numero di tentativi lo sbloccherà finché il capitale non
+    # aumenta. Alimenta la review dell'Agente 4 (vedi _build_performance_summary).
+    broker_min_size_rejections_by_symbol: dict[str, int] = field(default_factory=dict)
 
 
 def _build_performance_summary(components: LiveComponents, state: SessionState) -> dict:
@@ -47,6 +62,7 @@ def _build_performance_summary(components: LiveComponents, state: SessionState) 
         "unrealized_pnl_today": account.unrealized_pnl_today,
         "fees_paid_today": account.fees_paid_today,
         "funding_paid_today": account.funding_paid_today,
+        "rifiuti_quantita_minima_broker_per_simbolo": dict(state.broker_min_size_rejections_by_symbol),
     }
 
 
@@ -171,6 +187,16 @@ def run_order_risk_tick(components: LiveComponents, state: SessionState) -> list
 
         if tick.execution_result is not None and tick.execution_result.status.value == "filled":
             execution_results.append(tick.execution_result)
+
+        if (
+            tick.execution_result is not None
+            and tick.execution_result.status.value == "rejected"
+            and tick.execution_result.error_message
+            and _MIN_SIZE_REJECTION_MARKER in tick.execution_result.error_message
+        ):
+            state.broker_min_size_rejections_by_symbol[symbol] = (
+                state.broker_min_size_rejections_by_symbol.get(symbol, 0) + 1
+            )
 
     if execution_results:
         persist_live_state(components.session_factory, components.user_id, components.broker, state.risk_parameters)

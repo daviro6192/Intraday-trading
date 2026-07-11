@@ -16,15 +16,18 @@ from agents.strategy_agent import StrategyAgent
 from broker.paper_broker import PaperBroker
 from common.schemas import (
     Bias,
+    ExecutionResult,
+    ExecutionStatus,
     FeeSchedule,
     FundamentalAnalysis,
     FundamentalAnalysisBatch,
+    OrderSide,
     RiskParameters,
     StrategyView,
     StrategyViewBatch,
     TradeDirection,
 )
-from orchestrator.cycles import SessionState, run_fundamental_strategy_cycle, run_order_risk_tick
+from orchestrator.cycles import SessionState, _build_performance_summary, run_fundamental_strategy_cycle, run_order_risk_tick
 from orchestrator.factory import LiveComponents
 from storage.db import get_engine, get_session_factory, init_db
 from storage.models import ExecutionResultRecord, FundamentalAnalysisRecord, OrderIntentRecord, TradingSession
@@ -195,3 +198,39 @@ def test_fast_tick_returns_nothing_without_a_strategy_view(components, db_sessio
     assert results == []
     with components.session_factory() as db:
         assert db.query(OrderIntentRecord).count() == 0
+
+
+def test_fast_tick_tracks_broker_min_size_rejections(components, db_session_id, monkeypatch):
+    """Un rifiuto del broker per quantità sotto il minimo ordinabile
+    dell'exchange (limite strutturale legato al capitale, non di rischio)
+    va tracciato per simbolo: alimenta la review dell'Agente 4, che può
+    così mettere in pausa il simbolo senza aspettare un trade eseguito."""
+    monkeypatch.setattr("orchestrator.cycles.get_mark_price", lambda symbol: 100.0)
+    monkeypatch.setattr("orchestrator.cycles.get_recent_klines", lambda symbol, **kwargs: _rising_klines())
+    monkeypatch.setattr(
+        components.broker,
+        "place_order",
+        lambda **kwargs: ExecutionResult(
+            broker_order_id="REJECT-1",
+            symbol=kwargs["symbol"],
+            side=OrderSide.BUY,
+            status=ExecutionStatus.REJECTED,
+            error_message="quantità troppo piccola dopo arrotondamento allo step size di Bybit",
+        ),
+    )
+
+    state = SessionState(db_session_id=db_session_id, risk_parameters=_risk_params())
+    state.strategy_views["BTCUSDT"] = StrategyView(
+        symbol="BTCUSDT",
+        direction=TradeDirection.LONG,
+        conviction=0.8,
+        invalidation_condition="test",
+        rationale="test",
+    )
+
+    run_order_risk_tick(components, state)
+
+    assert state.broker_min_size_rejections_by_symbol == {"BTCUSDT": 1}
+
+    summary = _build_performance_summary(components, state)
+    assert summary["rifiuti_quantita_minima_broker_per_simbolo"] == {"BTCUSDT": 1}

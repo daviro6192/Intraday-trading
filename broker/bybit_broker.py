@@ -427,6 +427,12 @@ class BybitBroker:
         if entry is None:
             logger.warning("BybitBroker: ordine %s non trovato in order/history dopo il timeout di polling", order_id)
             entry = {"orderId": order_id, "orderStatus": "New", "cumExecQty": "0", "avgPrice": ""}
+        else:
+            logger.warning(
+                "BybitBroker: ordine %s ancora in stato %s dopo il timeout di polling (pending, non un errore)",
+                order_id,
+                entry.get("orderStatus"),
+            )
         return entry
 
     @staticmethod
@@ -493,6 +499,7 @@ class BybitBroker:
         )
 
         if response is None:
+            logger.warning("BybitBroker: ordine %s %s ERROR (Bybit non raggiungibile)", side.value, symbol)
             return ExecutionResult(
                 broker_order_id=f"BYBIT-ERROR-{int(time.time() * 1000)}",
                 symbol=symbol,
@@ -504,6 +511,14 @@ class BybitBroker:
         code = self._ret_code(response)
         if code is not None:
             status = ExecutionStatus.REJECTED if code in _KNOWN_REJECTION_CODES else ExecutionStatus.ERROR
+            logger.warning(
+                "BybitBroker: ordine %s %s %s da Bybit (retCode=%s, retMsg=%s)",
+                side.value,
+                symbol,
+                status.value.upper(),
+                code,
+                response.get("retMsg"),
+            )
             return ExecutionResult(
                 broker_order_id=f"BYBIT-{status.value.upper()}-{int(time.time() * 1000)}",
                 symbol=symbol,
@@ -515,6 +530,12 @@ class BybitBroker:
         order_id = response["result"]["orderId"]
         entry = self._poll_order_until_terminal(symbol, order_id)
         if entry is None:
+            logger.warning(
+                "BybitBroker: ordine %s %s ERROR (Bybit non raggiungibile durante la verifica dell'ordine %s)",
+                side.value,
+                symbol,
+                order_id,
+            )
             return ExecutionResult(
                 broker_order_id=str(order_id),
                 symbol=symbol,
@@ -529,7 +550,7 @@ class BybitBroker:
             realized_pnl = self._realized_pnl_for_order(symbol, order_id, entry, entry_avg_price, direction)
 
         avg_price_raw = entry.get("avgPrice")
-        return ExecutionResult(
+        result = ExecutionResult(
             broker_order_id=str(order_id),
             symbol=symbol,
             side=side,
@@ -539,6 +560,17 @@ class BybitBroker:
             fee=fee,
             realized_pnl=realized_pnl,
         )
+        logger.info(
+            "BybitBroker: ordine %s %s %s (order_id=%s, filled_qty=%s, avg_price=%s, fee=%s)",
+            side.value,
+            symbol,
+            result.status.value.upper(),
+            order_id,
+            result.filled_quantity,
+            result.avg_fill_price,
+            result.fee,
+        )
+        return result
 
     def _realized_pnl_for_order(
         self, symbol: str, order_id: str, entry: dict, entry_avg_price: float | None, direction: int

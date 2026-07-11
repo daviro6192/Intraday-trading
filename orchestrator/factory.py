@@ -58,20 +58,23 @@ def build_broker_for_user(user_settings: UserSettings, fee_schedule: FeeSchedule
             default_leverage=execution_config["default_leverage"],
         )
 
-    if user_settings.trading_mode == "crypto_com_testnet":
+    if user_settings.trading_mode in ("crypto_com_testnet", "crypto_com_live"):
         api_key = decrypt_secret(user_settings.crypto_com_api_key_encrypted)
         api_secret = decrypt_secret(user_settings.crypto_com_api_secret_encrypted)
+        is_live = user_settings.trading_mode == "crypto_com_live"
         if not api_key or not api_secret:
+            env_label = "di produzione (denaro reale)" if is_live else "UAT Sandbox"
             raise ValueError(
-                "Modalità Crypto.com Exchange Testnet selezionata ma nessuna credenziale salvata: vai su "
-                "Impostazioni e inserisci API key/secret del tuo account Crypto.com Exchange UAT Sandbox "
-                "(ambiente separato dall'account di produzione)."
+                f"Modalità Crypto.com Exchange {'reale' if is_live else 'Testnet'} selezionata ma nessuna "
+                f"credenziale salvata: vai su Impostazioni e inserisci API key/secret del tuo account "
+                f"Crypto.com Exchange {env_label}."
             )
         return CryptoComBroker(
             api_key=api_key,
             api_secret=api_secret,
             fee_schedule=fee_schedule,
             default_leverage=execution_config["default_leverage"],
+            use_production=is_live,
         )
 
     broker = PaperBroker(

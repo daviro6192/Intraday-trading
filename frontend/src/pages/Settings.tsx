@@ -76,6 +76,7 @@ export function SettingsPage() {
             <option value="paper">Paper (simulazione)</option>
             <option value="binance_testnet">Binance Futures Testnet</option>
             <option value="crypto_com_testnet">Crypto.com Exchange Testnet</option>
+            <option value="crypto_com_live">Crypto.com Exchange — CONTO REALE</option>
           </select>
         </label>
 
@@ -139,6 +140,40 @@ export function SettingsPage() {
             <p className="field-hint">
               {settings.has_crypto_com_testnet_credentials
                 ? 'Credenziali già salvate. Lascia i campi vuoti per non cambiarle, oppure inserisci nuovi valori per sostituirle.'
+                : 'Nessuna credenziale salvata: senza queste, avviare una sessione in questa modalità darà errore.'}
+            </p>
+          </>
+        )}
+
+        {tradingMode === 'crypto_com_live' && (
+          <>
+            <p className="form-error">
+              ⚠ Modalità con <strong>denaro reale</strong>: la piattaforma piazzerà ordini veri sul tuo account
+              Crypto.com Exchange di produzione, in automatico e senza chiedere conferma per ogni singolo trade —
+              stesso funzionamento continuo già usato in paper/testnet, ma con capitale vero in gioco. Servono le
+              API key/secret del tuo account di produzione (diverse da quelle sandbox).
+            </p>
+            <label>
+              API key Crypto.com (produzione)
+              <input
+                type="password"
+                value={cryptoComApiKey}
+                onChange={(e) => setCryptoComApiKey(e.target.value)}
+                placeholder={settings.has_crypto_com_testnet_credentials ? '••••••••••• (già salvata)' : ''}
+              />
+            </label>
+            <label>
+              API secret Crypto.com (produzione)
+              <input
+                type="password"
+                value={cryptoComApiSecret}
+                onChange={(e) => setCryptoComApiSecret(e.target.value)}
+                placeholder={settings.has_crypto_com_testnet_credentials ? '••••••••••• (già salvata)' : ''}
+              />
+            </label>
+            <p className="field-hint">
+              {settings.has_crypto_com_testnet_credentials
+                ? "Credenziali già salvate (usate sia per l'ambiente sandbox che per quello reale, a seconda della modalità scelta sopra). Lascia i campi vuoti per non cambiarle."
                 : 'Nessuna credenziale salvata: senza queste, avviare una sessione in questa modalità darà errore.'}
             </p>
           </>

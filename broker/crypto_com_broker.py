@@ -1,8 +1,14 @@
-"""Broker reale contro Crypto.com Exchange (UAT Sandbox, fondi finti, stessa
-identica API/comportamento del mainnet). Alternativa a
-broker/binance_futures_testnet_broker.py per un utente per cui Binance non è
-utilizzabile — vedi orchestrator/factory.py per la selezione in base a
-UserSettings.trading_mode.
+"""Broker reale contro Crypto.com Exchange — UAT Sandbox (fondi finti) o
+mainnet di produzione (fondi veri, use_production=True), stessa identica
+API. Alternativa a broker/binance_futures_testnet_broker.py per un utente
+per cui Binance non è utilizzabile — vedi orchestrator/factory.py per la
+selezione in base a UserSettings.trading_mode.
+
+ ATTENZIONE: in modalità produzione (trading_mode="crypto_com_live")
+questo broker piazza ordini REALI con denaro REALE, in automatico e senza
+conferma per singolo trade — è il comportamento normale della piattaforma
+(sessione continua), qui però con capitale vero in gioco. Richiede API
+key/secret dell'account di produzione, diverse da quelle sandbox.
 
 Architettura DIVERSA da Binance su punti che cambiano il design:
 - stile JSON-RPC su POST (corpo JSON id/method/params/nonce/sig), non
@@ -31,7 +37,8 @@ from common.schemas import AccountState, ExecutionResult, ExecutionStatus, FeeSc
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://uat-api.3ona.co/exchange/v1"
+_SANDBOX_BASE_URL = "https://uat-api.3ona.co/exchange/v1"
+_PRODUCTION_BASE_URL = "https://api.crypto.com/exchange/v1"
 _DEFAULT_TIMEOUT_SECONDS = 10
 _USER_AGENT = "intraday-trading-bot/0.1"
 _ACCOUNT_STATE_CACHE_TTL_SECONDS = 3.0
@@ -77,11 +84,19 @@ def _sign(method: str, request_id: int, api_key: str, params: dict, nonce: int, 
 
 
 class CryptoComBroker:
-    def __init__(self, api_key: str, api_secret: str, fee_schedule: FeeSchedule, default_leverage: float) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        fee_schedule: FeeSchedule,
+        default_leverage: float,
+        use_production: bool = False,
+    ) -> None:
         self._api_key = api_key
         self._api_secret = api_secret
         self._fee_schedule = fee_schedule
         self._default_leverage = default_leverage
+        self._base_url = _PRODUCTION_BASE_URL if use_production else _SANDBOX_BASE_URL
         self._session = requests.Session()
         self._request_id = 0
 
@@ -94,7 +109,7 @@ class CryptoComBroker:
         # credenziali vengono validate per davvero al primo
         # get_account_state() (chiamato subito dopo, in
         # session_manager.start_session).
-        logger.info("CryptoComBroker: pronto (%s)", _BASE_URL)
+        logger.info("CryptoComBroker: pronto (%s)", self._base_url)
 
     def disconnect(self) -> None:
         pass
@@ -125,7 +140,7 @@ class CryptoComBroker:
         }
         try:
             response = self._session.post(
-                f"{_BASE_URL}/{method}",
+                f"{self._base_url}/{method}",
                 json=body,
                 headers={"Content-Type": "application/json", "User-Agent": _USER_AGENT},
                 timeout=_DEFAULT_TIMEOUT_SECONDS,
@@ -138,7 +153,7 @@ class CryptoComBroker:
     def _public_get(self, method: str, params: dict) -> dict | None:
         try:
             response = requests.get(
-                f"{_BASE_URL}/{method}",
+                f"{self._base_url}/{method}",
                 params=params,
                 headers={"User-Agent": _USER_AGENT},
                 timeout=_DEFAULT_TIMEOUT_SECONDS,

@@ -97,3 +97,28 @@ def test_build_broker_for_user_builds_crypto_com_broker_with_valid_credentials()
     broker = build_broker_for_user(user_settings, _fee_schedule())
 
     assert isinstance(broker, CryptoComBroker)
+    assert broker._base_url == "https://uat-api.3ona.co/exchange/v1"
+
+
+def test_build_broker_for_user_raises_when_crypto_com_live_mode_has_no_credentials() -> None:
+    user_settings = SimpleNamespace(
+        trading_mode="crypto_com_live",
+        crypto_com_api_key_encrypted="",
+        crypto_com_api_secret_encrypted="",
+    )
+
+    with pytest.raises(ValueError, match="Impostazioni"):
+        build_broker_for_user(user_settings, _fee_schedule())
+
+
+def test_build_broker_for_user_builds_crypto_com_broker_in_production_mode() -> None:
+    user_settings = SimpleNamespace(
+        trading_mode="crypto_com_live",
+        crypto_com_api_key_encrypted=encrypt_secret("my-key"),
+        crypto_com_api_secret_encrypted=encrypt_secret("my-secret"),
+    )
+
+    broker = build_broker_for_user(user_settings, _fee_schedule())
+
+    assert isinstance(broker, CryptoComBroker)
+    assert broker._base_url == "https://api.crypto.com/exchange/v1"

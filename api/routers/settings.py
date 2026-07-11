@@ -16,7 +16,7 @@ from common.crypto import encrypt_secret
 from common.pricing import estimate_cost_usd
 from storage.models import User
 
-_VALID_TRADING_MODES = {"paper", "binance_testnet", "crypto_com_testnet"}
+_VALID_TRADING_MODES = {"paper", "binance_testnet", "crypto_com_testnet", "crypto_com_live"}
 
 router = APIRouter(prefix="/api", tags=["settings"])
 

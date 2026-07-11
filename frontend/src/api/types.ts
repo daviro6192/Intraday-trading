@@ -26,7 +26,7 @@ export interface AccountState {
   as_of: string
 }
 
-export type TradingMode = 'paper' | 'binance_testnet' | 'crypto_com_testnet'
+export type TradingMode = 'paper' | 'binance_testnet' | 'crypto_com_testnet' | 'crypto_com_live'
 
 export interface SettingsResponse {
   has_api_key: boolean

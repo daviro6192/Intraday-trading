@@ -57,6 +57,7 @@ _RECV_WINDOW_MS = "5000"
 _ACCOUNT_STATE_CACHE_TTL_SECONDS = 3.0
 _ORDER_POLL_INTERVAL_SECONDS = 0.3
 _ORDER_POLL_MAX_ATTEMPTS = 10
+_SERVER_TIME_OFFSET_REFRESH_SECONDS = 300.0
 _TERMINAL_ORDER_STATUSES = {"Filled", "Rejected", "Cancelled", "PartiallyFilledCanceled"}
 
 # Codici retCode "già impostato così" da trattare come successo (idempotenza
@@ -95,6 +96,8 @@ class BybitBroker:
         self._isolated_configured: set[str] = set()
         self._leverage_by_symbol: dict[str, float] = {}
         self._account_state_cache: tuple[float, AccountState] | None = None
+        self._server_time_offset_ms = 0.0
+        self._server_time_offset_checked_at: float | None = None
 
     def connect(self) -> None:
         # Nessuna chiamata di rete qui, stesso motivo degli altri broker
@@ -110,11 +113,37 @@ class BybitBroker:
     # Richieste HTTP: firmate (private) e pubbliche (market/instruments-info)
     # ------------------------------------------------------------------
 
+    def _refresh_server_time_offset(self) -> None:
+        """Bybit rifiuta una richiesta il cui timestamp è anche solo ~1s
+        avanti rispetto al proprio orologio server (a differenza della
+        tolleranza simmetrica di recv_window all'indietro) — un server con
+        l'orologio leggermente disallineato (comune su VM/hosting) basta a
+        far fallire ogni richiesta con "invalid request...check your server
+        timestamp". Ci si allinea periodicamente all'orario del server
+        Bybit stesso (endpoint pubblico) invece di fidarsi solo
+        dell'orologio locale. Un fallimento qui degrada mantenendo l'ultimo
+        offset noto (0.0 se non ancora calcolato), non solleva mai."""
+        if (
+            self._server_time_offset_checked_at is not None
+            and time.monotonic() - self._server_time_offset_checked_at < _SERVER_TIME_OFFSET_REFRESH_SECONDS
+        ):
+            return
+        response = self._public_get("/v5/market/time", {})
+        if response is not None and "time" in response:
+            self._server_time_offset_ms = float(response["time"]) - int(time.time() * 1000)
+        else:
+            logger.warning("BybitBroker: impossibile sincronizzare l'orario col server Bybit, uso l'ultimo offset noto")
+        self._server_time_offset_checked_at = time.monotonic()
+
+    def _timestamp_ms(self) -> str:
+        self._refresh_server_time_offset()
+        return str(int(time.time() * 1000 + self._server_time_offset_ms))
+
     def _signed_request(self, method: str, path: str, params: dict) -> dict | None:
         """None = fallimento di rete (mai un'eccezione qui). Altrimenti
         sempre il dict di risposta, incluso il caso di errore
         (retCode != 0 — il successo è retCode == 0)."""
-        timestamp = str(int(time.time() * 1000))
+        timestamp = self._timestamp_ms()
         if method == "GET":
             query_string = "&".join(f"{k}={v}" for k, v in params.items())
             body_to_sign = query_string

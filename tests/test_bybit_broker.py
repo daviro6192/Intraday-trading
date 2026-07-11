@@ -33,6 +33,42 @@ def broker() -> BybitBroker:
     return BybitBroker(api_key="test-key", api_secret="test-secret", fee_schedule=_fee_schedule(), default_leverage=3.0)
 
 
+def test_timestamp_ms_applies_server_offset_when_local_clock_is_ahead(broker, monkeypatch):
+    """Bybit rifiuta un timestamp anche solo ~1s avanti rispetto al proprio
+    orologio server: se l'orologio locale è avanti, il timestamp usato per
+    firmare deve essere corretto dell'offset misurato contro il server."""
+    monkeypatch.setattr("broker.bybit_broker.time.time", lambda: 1000.0)  # orologio locale: 1000.0s = 1_000_000ms
+    monkeypatch.setattr(broker, "_public_get", lambda path, params: {"retCode": 0, "time": 998300})  # server: 1.7s indietro
+
+    timestamp = broker._timestamp_ms()
+
+    assert timestamp == "998300"
+
+
+def test_timestamp_ms_reuses_cached_offset_within_ttl(broker, monkeypatch):
+    call_count = 0
+
+    def fake_public_get(path, params):
+        nonlocal call_count
+        call_count += 1
+        return {"retCode": 0, "time": 1_000_000}
+
+    monkeypatch.setattr("broker.bybit_broker.time.time", lambda: 1000.0)
+    monkeypatch.setattr(broker, "_public_get", fake_public_get)
+
+    broker._timestamp_ms()
+    broker._timestamp_ms()
+
+    assert call_count == 1
+
+
+def test_timestamp_ms_degrades_to_local_clock_when_sync_fails(broker, monkeypatch):
+    monkeypatch.setattr("broker.bybit_broker.time.time", lambda: 1000.0)
+    monkeypatch.setattr(broker, "_public_get", lambda path, params: None)
+
+    assert broker._timestamp_ms() == "1000000"
+
+
 def test_sign_matches_documented_string_construction():
     """La regola documentata è timestamp+api_key+recv_window+queryString
     (GET) — verifichiamo solo la costruzione della stringa (l'esempio del

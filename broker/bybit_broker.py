@@ -78,6 +78,16 @@ def _sign(sign_string: str, api_secret: str) -> str:
     return hmac.new(api_secret.encode("utf-8"), sign_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+def _to_float(value: object, default: float = 0.0) -> float:
+    """Diversi campi numerici di Bybit sono stringa vuota ("") quando non
+    applicabili, non assenti né "0" — osservato dal vivo su
+    totalAvailableBalance con un conto UTA appena rifornito. float("")
+    solleverebbe ValueError: qui si tratta come il default."""
+    if value is None or value == "":
+        return default
+    return float(value)
+
+
 class BybitBroker:
     def __init__(
         self,
@@ -229,22 +239,23 @@ class BybitBroker:
         positions: list[Position] = []
         if positions_response is not None and self._ret_code(positions_response) is None:
             for entry in positions_response["result"]["list"]:
-                size = float(entry.get("size", 0.0))
+                size = _to_float(entry.get("size"))
                 if size == 0:
                     continue
                 quantity = size if entry.get("side") == "Buy" else -size
                 liq_price_raw = entry.get("liqPrice")
-                liquidation_price = float(liq_price_raw) if liq_price_raw not in (None, "") else None
+                liquidation_price = _to_float(liq_price_raw) if liq_price_raw not in (None, "") else None
+                avg_price = _to_float(entry.get("avgPrice"))
                 positions.append(
                     Position(
                         symbol=entry["symbol"],
                         quantity=quantity,
-                        avg_price=float(entry.get("avgPrice", 0.0)),
-                        leverage=float(entry.get("leverage", self._default_leverage)),
-                        initial_margin=float(entry.get("positionIM", 0.0) or 0.0),
+                        avg_price=avg_price,
+                        leverage=_to_float(entry.get("leverage"), self._default_leverage),
+                        initial_margin=_to_float(entry.get("positionIM")),
                         liquidation_price=liquidation_price,
-                        market_value=float(entry.get("positionValue", quantity * float(entry.get("avgPrice", 0.0)))),
-                        unrealized_pnl=float(entry.get("unrealisedPnl", 0.0)),
+                        market_value=_to_float(entry.get("positionValue"), quantity * avg_price),
+                        unrealized_pnl=_to_float(entry.get("unrealisedPnl")),
                     )
                 )
         else:
@@ -254,8 +265,8 @@ class BybitBroker:
         fees_paid_today, funding_paid_today = self._fees_and_funding_since_midnight()
 
         state = AccountState(
-            equity=float(account_info.get("totalEquity", 0.0)),
-            cash=float(account_info.get("totalAvailableBalance", 0.0)),
+            equity=_to_float(account_info.get("totalEquity")),
+            cash=_to_float(account_info.get("totalAvailableBalance")),
             open_positions=positions,
             realized_pnl_today=realized_pnl_today,
             unrealized_pnl_today=sum(p.unrealized_pnl for p in positions),
@@ -273,7 +284,7 @@ class BybitBroker:
         if response is None or self._ret_code(response) is not None:
             logger.warning("BybitBroker: impossibile leggere il P&L realizzato di oggi, uso 0.0")
             return 0.0
-        return sum(float(entry.get("closedPnl", 0.0)) for entry in response["result"]["list"])
+        return sum(_to_float(entry.get("closedPnl")) for entry in response["result"]["list"])
 
     def _fees_and_funding_since_midnight(self) -> tuple[float, float]:
         """Fee di trading e funding "di oggi" da /v5/execution/list, separate
@@ -290,7 +301,7 @@ class BybitBroker:
 
         fees = funding = 0.0
         for entry in response["result"]["list"]:
-            fee = float(entry.get("execFee", 0.0))
+            fee = _to_float(entry.get("execFee"))
             if entry.get("execType") == "Funding":
                 funding += fee
             else:
@@ -426,7 +437,7 @@ class BybitBroker:
         if bybit_status == "Rejected":
             return ExecutionStatus.REJECTED
         if bybit_status in ("Cancelled", "PartiallyFilledCanceled"):
-            return ExecutionStatus.CANCELLED if float(entry.get("cumExecQty", 0.0)) == 0 else ExecutionStatus.PARTIALLY_FILLED
+            return ExecutionStatus.CANCELLED if _to_float(entry.get("cumExecQty")) == 0 else ExecutionStatus.PARTIALLY_FILLED
         if bybit_status == "PartiallyFilled":
             return ExecutionStatus.PARTIALLY_FILLED
         return ExecutionStatus.SUBMITTED
@@ -438,7 +449,7 @@ class BybitBroker:
         if response is None or self._ret_code(response) is not None:
             logger.warning("BybitBroker: impossibile leggere le fee reali dell'ordine %s, uso 0.0", order_id)
             return 0.0
-        return sum(float(e.get("execFee", 0.0)) for e in response["result"]["list"])
+        return sum(_to_float(e.get("execFee")) for e in response["result"]["list"])
 
     def place_order(
         self,
@@ -523,8 +534,8 @@ class BybitBroker:
             symbol=symbol,
             side=side,
             status=self._map_status(entry),
-            filled_quantity=float(entry.get("cumExecQty", 0.0)),
-            avg_fill_price=float(avg_price_raw) if avg_price_raw not in (None, "") else None,
+            filled_quantity=_to_float(entry.get("cumExecQty")),
+            avg_fill_price=_to_float(avg_price_raw) if avg_price_raw not in (None, "") else None,
             fee=fee,
             realized_pnl=realized_pnl,
         )
@@ -543,7 +554,7 @@ class BybitBroker:
         if response is not None and self._ret_code(response) is None:
             match = next((e for e in response["result"]["list"] if e.get("orderId") == order_id), None)
             if match is not None:
-                return float(match["closedPnl"])
+                return _to_float(match["closedPnl"])
 
         logger.warning(
             "BybitBroker: P&L realizzato non trovato in closed-pnl per l'ordine %s, calcolato da prezzo entrata/uscita",
@@ -552,8 +563,8 @@ class BybitBroker:
         if entry_avg_price is None:
             return None
         exit_avg_price_raw = entry.get("avgPrice")
-        exit_avg_price = float(exit_avg_price_raw) if exit_avg_price_raw not in (None, "") else entry_avg_price
-        closed_quantity = float(entry.get("cumExecQty", 0.0))
+        exit_avg_price = _to_float(exit_avg_price_raw) if exit_avg_price_raw not in (None, "") else entry_avg_price
+        closed_quantity = _to_float(entry.get("cumExecQty"))
         return closed_quantity * (exit_avg_price - entry_avg_price) * direction
 
     def close_position(self, symbol: str) -> ExecutionResult | None:

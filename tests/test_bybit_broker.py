@@ -18,7 +18,7 @@ import hmac
 
 import pytest
 
-from broker.bybit_broker import BybitBroker, _sign
+from broker.bybit_broker import BybitBroker, _sign, _to_float
 from common.schemas import AccountState, ExecutionStatus, FeeSchedule, OrderSide, Position
 
 
@@ -31,6 +31,16 @@ def _fee_schedule() -> FeeSchedule:
 @pytest.fixture
 def broker() -> BybitBroker:
     return BybitBroker(api_key="test-key", api_secret="test-secret", fee_schedule=_fee_schedule(), default_leverage=3.0)
+
+
+def test_to_float_treats_empty_string_as_default():
+    """Osservato dal vivo: Bybit riporta alcuni campi numerici (es.
+    totalAvailableBalance) come stringa vuota "" invece di assenti o "0"
+    quando non applicabili — float("") solleverebbe ValueError."""
+    assert _to_float("") == 0.0
+    assert _to_float("", default=5.0) == 5.0
+    assert _to_float(None) == 0.0
+    assert _to_float("12.5") == 12.5
 
 
 def test_timestamp_ms_applies_server_offset_when_local_clock_is_ahead(broker, monkeypatch):
@@ -331,6 +341,27 @@ def test_get_account_state_maps_fields(broker, monkeypatch):
     assert position.quantity == pytest.approx(0.01)
     assert position.avg_price == pytest.approx(60000.0)
     assert position.liquidation_price is None  # liqPrice vuota
+
+
+def test_get_account_state_treats_empty_string_balance_as_zero(broker, monkeypatch):
+    """Regressione: Bybit ha riportato dal vivo totalAvailableBalance="" su
+    un conto UTA appena rifornito (invece di assente o "0"), facendo
+    sollevare ValueError a float("")."""
+    def fake_signed_request(method, path, params):
+        if path == "/v5/account/wallet-balance":
+            return {"retCode": 0, "result": {"list": [{"totalEquity": "10.0", "totalAvailableBalance": ""}]}}
+        return {
+            "/v5/position/list": {"retCode": 0, "result": {"list": []}},
+            "/v5/position/closed-pnl": _CLOSED_PNL_RESPONSE,
+            "/v5/execution/list": _EXECUTIONS_RESPONSE,
+        }[path]
+
+    monkeypatch.setattr(broker, "_signed_request", fake_signed_request)
+
+    state = broker.get_account_state()
+
+    assert state.equity == pytest.approx(10.0)
+    assert state.cash == pytest.approx(0.0)
 
 
 def test_get_account_state_short_position_has_negative_quantity(broker, monkeypatch):

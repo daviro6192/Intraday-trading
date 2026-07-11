@@ -34,6 +34,7 @@ class SettingsResponse(BaseModel):
     ibkr_client_id: int
     has_binance_testnet_credentials: bool
     has_crypto_com_testnet_credentials: bool
+    has_bybit_testnet_credentials: bool
 
 
 class UsageStats(BaseModel):
@@ -56,6 +57,8 @@ class SettingsUpdateRequest(BaseModel):
     binance_testnet_api_secret: str | None = None
     crypto_com_api_key: str | None = None
     crypto_com_api_secret: str | None = None
+    bybit_api_key: str | None = None
+    bybit_api_secret: str | None = None
 
 
 class SessionStatusResponse(BaseModel):

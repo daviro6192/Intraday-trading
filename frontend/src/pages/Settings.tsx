@@ -9,6 +9,8 @@ export function SettingsPage() {
   const [binanceApiSecret, setBinanceApiSecret] = useState('')
   const [cryptoComApiKey, setCryptoComApiKey] = useState('')
   const [cryptoComApiSecret, setCryptoComApiSecret] = useState('')
+  const [bybitApiKey, setBybitApiKey] = useState('')
+  const [bybitApiSecret, setBybitApiSecret] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -34,6 +36,8 @@ export function SettingsPage() {
       if (binanceApiSecret) body.binance_testnet_api_secret = binanceApiSecret
       if (cryptoComApiKey) body.crypto_com_api_key = cryptoComApiKey
       if (cryptoComApiSecret) body.crypto_com_api_secret = cryptoComApiSecret
+      if (bybitApiKey) body.bybit_api_key = bybitApiKey
+      if (bybitApiSecret) body.bybit_api_secret = bybitApiSecret
 
       const updated = await api.put<SettingsResponse>('/settings', body)
       setSettings(updated)
@@ -43,6 +47,8 @@ export function SettingsPage() {
       setBinanceApiSecret('')
       setCryptoComApiKey('')
       setCryptoComApiSecret('')
+      setBybitApiKey('')
+      setBybitApiSecret('')
       setMessage('Impostazioni salvate.')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Errore nel salvataggio delle impostazioni')
@@ -77,6 +83,8 @@ export function SettingsPage() {
             <option value="binance_testnet">Binance Futures Testnet</option>
             <option value="crypto_com_testnet">Crypto.com Exchange Testnet</option>
             <option value="crypto_com_live">Crypto.com Exchange — CONTO REALE</option>
+            <option value="bybit_testnet">Bybit Testnet</option>
+            <option value="bybit_live">Bybit — CONTO REALE</option>
           </select>
         </label>
 
@@ -174,6 +182,73 @@ export function SettingsPage() {
             <p className="field-hint">
               {settings.has_crypto_com_testnet_credentials
                 ? "Credenziali già salvate (usate sia per l'ambiente sandbox che per quello reale, a seconda della modalità scelta sopra). Lascia i campi vuoti per non cambiarle."
+                : 'Nessuna credenziale salvata: senza queste, avviare una sessione in questa modalità darà errore.'}
+            </p>
+          </>
+        )}
+
+        {tradingMode === 'bybit_testnet' && (
+          <>
+            <p className="field-hint">
+              Serve un account <strong>Bybit Testnet</strong> (fondi finti, comportamento reale dell'exchange),
+              registrato separatamente su testnet.bybit.com — non è il tuo account Bybit reale, e le chiavi non
+              sono le stesse.
+            </p>
+            <label>
+              API key Bybit Testnet
+              <input
+                type="password"
+                value={bybitApiKey}
+                onChange={(e) => setBybitApiKey(e.target.value)}
+                placeholder={settings.has_bybit_testnet_credentials ? '••••••••••• (già salvata)' : ''}
+              />
+            </label>
+            <label>
+              API secret Bybit Testnet
+              <input
+                type="password"
+                value={bybitApiSecret}
+                onChange={(e) => setBybitApiSecret(e.target.value)}
+                placeholder={settings.has_bybit_testnet_credentials ? '••••••••••• (già salvata)' : ''}
+              />
+            </label>
+            <p className="field-hint">
+              {settings.has_bybit_testnet_credentials
+                ? 'Credenziali già salvate. Lascia i campi vuoti per non cambiarle, oppure inserisci nuovi valori per sostituirle.'
+                : 'Nessuna credenziale salvata: senza queste, avviare una sessione in questa modalità darà errore.'}
+            </p>
+          </>
+        )}
+
+        {tradingMode === 'bybit_live' && (
+          <>
+            <p className="form-error">
+              ⚠ Modalità con <strong>denaro reale</strong>: la piattaforma piazzerà ordini veri sul tuo account
+              Bybit di produzione, in automatico e senza chiedere conferma per ogni singolo trade — stesso
+              funzionamento continuo già usato in paper/testnet, ma con capitale vero in gioco. Servono le API
+              key/secret del tuo account di produzione (diverse da quelle testnet).
+            </p>
+            <label>
+              API key Bybit (produzione)
+              <input
+                type="password"
+                value={bybitApiKey}
+                onChange={(e) => setBybitApiKey(e.target.value)}
+                placeholder={settings.has_bybit_testnet_credentials ? '••••••••••• (già salvata)' : ''}
+              />
+            </label>
+            <label>
+              API secret Bybit (produzione)
+              <input
+                type="password"
+                value={bybitApiSecret}
+                onChange={(e) => setBybitApiSecret(e.target.value)}
+                placeholder={settings.has_bybit_testnet_credentials ? '••••••••••• (già salvata)' : ''}
+              />
+            </label>
+            <p className="field-hint">
+              {settings.has_bybit_testnet_credentials
+                ? "Credenziali già salvate (usate sia per l'ambiente testnet che per quello reale, a seconda della modalità scelta sopra). Lascia i campi vuoti per non cambiarle."
                 : 'Nessuna credenziale salvata: senza queste, avviare una sessione in questa modalità darà errore.'}
             </p>
           </>

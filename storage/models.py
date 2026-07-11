@@ -90,6 +90,11 @@ class UserSettings(Base):
     crypto_com_api_key_encrypted: Mapped[str] = mapped_column(Text, default="")
     crypto_com_api_secret_encrypted: Mapped[str] = mapped_column(Text, default="")
 
+    # Credenziali Bybit (V5, Testnet o mainnet a seconda di trading_mode),
+    # stesso principio delle credenziali sopra.
+    bybit_api_key_encrypted: Mapped[str] = mapped_column(Text, default="")
+    bybit_api_secret_encrypted: Mapped[str] = mapped_column(Text, default="")
+
     # Blob JSON: struttura identica alle rispettive sezioni di config/trading.yaml
     symbols_json: Mapped[str] = mapped_column(Text, default="{}")
     risk_limits_json: Mapped[str] = mapped_column(Text, default="{}")
